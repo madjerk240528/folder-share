@@ -136,8 +136,8 @@
 <body>
 
 <nav>
-  <div class="logo">⚡ File<span>Share</span> <span class="badge">P2P</span><span class="speed-badge">Auto-ZIP Folders</span></div>
-  <div style="font-size:0.78rem;color:var(--muted)">1 File Direct • Folders to Single ZIP • Direct P2P</div>
+  <div class="logo">⚡ File<span>Share</span> <span class="badge">P2P</span><span class="speed-badge">29s Keep-Awake</span></div>
+  <div style="font-size:0.78rem;color:var(--muted)">1 File Direct • Folders to Single ZIP • Screen Stays ON</div>
 </nav>
 
 <!-- ══════════════ HOME ══════════════ -->
@@ -147,7 +147,7 @@
     <p>Single files share as-is. Multiple files or folders auto-pack into 1 ZIP. High-speed peer-to-peer.</p>
     <div class="format-tags">
       <span class="format-tag">📄 1-File Direct (No ZIP)</span><span class="format-tag">🗜️ Folders Auto-Packed to Single ZIP</span>
-      <span class="format-tag">📱 Background-Tab Auto-Reconnect</span>
+      <span class="format-tag">⏱️ 29s Phone Keep-Awake</span>
       <span class="format-tag">🎬 MP4 MKV AVI</span><span class="format-tag">🖼️ JPG PNG RAW</span>
       <span class="format-tag">🎵 MP3 FLAC WAV</span><span class="format-tag">📁 Whole Folder Trees</span>
       <span class="format-tag">⚙️ EXE MSI APK</span><span class="format-tag">💻 Any Code file</span><span class="format-tag">📊 XLSX CSV</span>
@@ -167,9 +167,9 @@
     </div>
   </div>
   <div class="perf-box">
-    <div class="ph">⚡ High-Speed Transfer Engine</div>
-    <strong>1-file direct streaming</strong> · <strong>Auto-ZIP for folders</strong> · <strong>Keep-alive auto-reconnect on mobile</strong> · <strong>7 STUN servers</strong><br>
-    <span style="color:var(--muted)">On a fast LAN or internet connection, expect speeds of <strong style="color:var(--green)">50–500 MB/s</strong> peer-to-peer.</span>
+    <div class="ph">⚡ High-Speed Transfer Engine &amp; 29s Heartbeat</div>
+    <strong>Screen stays on automatically</strong> via 29s wake-lock pulse · <strong>256 KB chunks</strong> · <strong>7 STUN servers</strong> for direct P2P<br>
+    <span style="color:var(--muted)">Your phone will not turn off or sleep while sharing or receiving files.</span>
   </div>
   <div class="info-box">
     🔒 <strong>How it works:</strong> If you select 1 file, it sends directly without zipping. If you select multiple files or import a folder, it automatically packs them into a single <code>.zip</code> file. Everything transfers directly between devices.
@@ -236,7 +236,7 @@
 
       <div style="margin-top:14px; font-size:0.88rem; color:var(--muted);">
         <span class="status-dot dot-yellow" id="statusDot"></span>
-        <span id="statusText">Setting up…</span>
+        <span id="statusText">Connecting to server…</span>
       </div>
 
       <!-- Connected receivers list -->
@@ -301,32 +301,24 @@
 'use strict';
 
 // ══════════════════════════════════════════════════════
-//  ⚡ SPEED & NETWORK CONFIG
+//  ⚡ SPEED & STUN CONFIG
 // ══════════════════════════════════════════════════════
 const CHUNK_SIZE   = 256 * 1024;        // 256 KB per chunk
-const HIGH_WATER   = 8  * 1024 * 1024;  // 8 MB — pause sending
-const LOW_WATER    = 2  * 1024 * 1024;  // 2 MB — resume sending
-const SPEED_WINDOW = 1000;              // speed sample window ms
+const HIGH_WATER   = 8  * 1024 * 1024;  // 8 MB flow control
+const LOW_WATER    = 2  * 1024 * 1024;  // 2 MB resume
+const SPEED_WINDOW = 1000;              // speed calculation window ms
 
-// Multiple STUN servers → direct P2P
 const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302'      },
-  { urls: 'stun:stun1.l.google.com:19302'     },
-  { urls: 'stun:stun2.l.google.com:19302'     },
-  { urls: 'stun:stun3.l.google.com:19302'     },
-  { urls: 'stun:stun4.l.google.com:19302'     },
-  { urls: 'stun:global.stun.twilio.com:3478'  },
-  { urls: 'stun:stun.cloudflare.com:3478'     },
+  { urls: 'stun:stun.l.google.com:19302'     },
+  { urls: 'stun:stun1.l.google.com:19302'    },
+  { urls: 'stun:stun2.l.google.com:19302'    },
+  { urls: 'stun:stun3.l.google.com:19302'    },
+  { urls: 'stun:stun4.l.google.com:19302'    },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+  { urls: 'stun:stun.cloudflare.com:3478'    },
 ];
 
-// PeerJS signalling endpoints
-const PEER_SERVERS = [
-  { host: '0.peerjs.com', port: 443, path: '/', secure: true  },
-  { host: 'peer.miragejs.com', port: 443, path: '/', secure: true },
-  null,
-];
-
-const BASE_PEER_CONFIG = {
+const PEER_CONFIG = {
   debug: 0,
   config: {
     iceServers: ICE_SERVERS,
@@ -369,9 +361,13 @@ function getDeviceInfo() {
 const MY_DEVICE = getDeviceInfo();
 
 // ══════════════════════════════════════════════════════
-//  MOBILE SLEEP & WAKE LOCK
+//  ⏱️ 29-SECOND HEARTBEAT & KEEP-AWAKE ENGINE
+//  Prevents mobile phone screen from turning off or sleeping
 // ══════════════════════════════════════════════════════
-let wakeLock = null;
+let wakeLock       = null;
+let keepAwakeTimer = null;
+let audioCtx       = null;
+
 async function requestWakeLock() {
   try {
     if ('wakeLock' in navigator && !wakeLock) {
@@ -388,51 +384,95 @@ function releaseWakeLock() {
   }
 }
 
-// ══════════════════════════════════════════════════════
-//  HEARTBEAT (Prevents mobile background socket drops)
-// ══════════════════════════════════════════════════════
-let heartbeatTimer = null;
-function startHeartbeat() {
-  stopHeartbeat();
-  heartbeatTimer = setInterval(() => {
-    if (sharePeer && !sharePeer.disconnected && !sharePeer.destroyed) {
-      try {
-        if (sharePeer.socket && typeof sharePeer.socket.send === 'function') {
-          sharePeer.socket.send({ type: 'HEARTBEAT' });
-        }
-      } catch (_) {}
+// Silent WebAudio oscillator keep-alive (keeps mobile audio pipeline & screen awake)
+function startSilentAudio() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!audioCtx && AudioContext) {
+      audioCtx = new AudioContext();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.00001; // completely silent
+      const osc = audioCtx.createOscillator();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
     }
-  }, 10000);
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  } catch (_) {}
 }
 
-function stopHeartbeat() {
-  if (heartbeatTimer) {
-    clearInterval(heartbeatTimer);
-    heartbeatTimer = null;
+function stopSilentAudio() {
+  try {
+    if (audioCtx) {
+      audioCtx.close();
+      audioCtx = null;
+    }
+  } catch (_) {}
+}
+
+// Starts the 29-second heartbeat keep-awake on Sharing OR Receiving
+function startKeepAwake() {
+  stopKeepAwake();
+  requestWakeLock();
+  startSilentAudio();
+
+  // Heartbeat runs exactly every 29 seconds
+  keepAwakeTimer = setInterval(() => {
+    // 1. Re-request Screen Wake Lock so phone screen never turns off
+    requestWakeLock();
+    startSilentAudio();
+
+    // 2. Sender: Send 29s heartbeat ping to all connected receivers
+    if (shareConns.length > 0) {
+      shareConns.forEach(conn => {
+        if (conn && conn.open) {
+          try { conn.send({ type: 'ping' }); } catch (_) {}
+        }
+      });
+    }
+
+    // 3. Receiver: Send 29s heartbeat ping to sender
+    if (recvConn && recvConn.open) {
+      try { recvConn.send({ type: 'ping' }); } catch (_) {}
+    }
+  }, 29000); // 29,000 ms = 29 seconds
+}
+
+function stopKeepAwake() {
+  if (keepAwakeTimer) {
+    clearInterval(keepAwakeTimer);
+    keepAwakeTimer = null;
   }
+  releaseWakeLock();
+  stopSilentAudio();
 }
 
 // ══════════════════════════════════════════════════════
-//  VISIBILITY CHANGE (Foreground recovery for mobile tabs)
+//  PAGE VISIBILITY (Clean foreground wake-up without loops)
 // ══════════════════════════════════════════════════════
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     requestWakeLock();
+    startSilentAudio();
 
-    // Check sender peer
-    if (currentCode && sharePeer) {
-      if (sharePeer.disconnected && !sharePeer.destroyed) {
+    // Check sender status
+    if (currentCode && sharePeer && !intentionalDestroy) {
+      if (shareConns.length > 0) {
+        setShareStatus('green', `${shareConns.length} receiver(s) connected`);
+        if (sharePeer.disconnected && !sharePeer.destroyed) {
+          try { sharePeer.reconnect(); } catch (_) {}
+        }
+      } else if (sharePeer.disconnected && !sharePeer.destroyed) {
         setShareStatus('yellow', '<span class="connecting-anim"></span> Reconnecting…');
-        try { sharePeer.reconnect(); } catch (_) { recoverSharePeer(currentCode); }
-      } else if (sharePeer.destroyed) {
-        recoverSharePeer(currentCode);
+        try { sharePeer.reconnect(); } catch (_) { handleServerDisconnect(currentCode); }
       } else if (sharePeer.open) {
-        setShareStatus(shareConns.length ? 'green' : 'yellow',
-          shareConns.length ? `${shareConns.length} receiver(s) connected` : 'Ready — share the code above');
+        setShareStatus('yellow', 'Ready — share the code above');
       }
     }
 
-    // Check receiver peer
+    // Check receiver status
     if (recvPeer && document.getElementById('page-receive').classList.contains('active')) {
       if (recvPeer.disconnected && !recvPeer.destroyed) {
         try { recvPeer.reconnect(); } catch (_) {}
@@ -502,60 +542,8 @@ function fileIcon(name) {
 
 function genCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
 
-function createPeerWithFallback(peerId, onReady, onError) {
-  let serverIdx = 0;
-  let peer = null;
-  let timeoutHandle = null;
-  let hasOpened = false;
-
-  function tryNext() {
-    if (hasOpened) return;
-    if (peer) { try { peer.destroy(); } catch(_) {} peer = null; }
-    if (serverIdx >= PEER_SERVERS.length) {
-      onError(new Error('Could not connect to any signalling server'));
-      return;
-    }
-    const srv = PEER_SERVERS[serverIdx++];
-    const cfg = { ...BASE_PEER_CONFIG };
-    if (srv) {
-      cfg.host   = srv.host;
-      cfg.port   = srv.port;
-      cfg.path   = srv.path;
-      cfg.secure = srv.secure;
-    }
-
-    peer = peerId ? new Peer(peerId, cfg) : new Peer(cfg);
-
-    timeoutHandle = setTimeout(() => {
-      if (!hasOpened) {
-        console.warn('[FileShare] Signalling timeout, trying next…');
-        tryNext();
-      }
-    }, 4000);
-
-    peer.on('open', id => {
-      clearTimeout(timeoutHandle);
-      hasOpened = true;
-      onReady(peer, id);
-    });
-
-    peer.on('error', err => {
-      if (!hasOpened) {
-        clearTimeout(timeoutHandle);
-        if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
-          tryNext();
-        } else {
-          onError(err);
-        }
-      }
-    });
-  }
-
-  tryNext();
-}
-
 // ══════════════════════════════════════════════════════
-//  ZIP PACKAGING ENGINE (Multiple Files / Folders)
+//  ZIP PACKAGING (Multiple Files / Folders)
 // ══════════════════════════════════════════════════════
 async function packageIntoZip(files, zipName, onProgress) {
   if (typeof JSZip === 'undefined') {
@@ -628,13 +616,14 @@ async function onDrop(e) {
 // ══════════════════════════════════════════════════════
 //  SHARE SIDE
 // ══════════════════════════════════════════════════════
-let sharedFiles     = [];
-let originalSource  = [];
-let sharePeer       = null;
-let shareConns      = [];
-let currentCode     = '';
-let connDevices     = {};
-let isRecovering    = false;
+let sharedFiles        = [];
+let originalSource     = [];
+let sharePeer          = null;
+let shareConns         = [];
+let currentCode        = '';
+let connDevices        = {};
+let intentionalDestroy = false;
+let reconnectDebounce  = null;
 
 async function onFilesSelected(list, isFolder = false, explicitFolderName = '') {
   const files = Array.from(list);
@@ -685,9 +674,9 @@ async function onFilesSelected(list, isFolder = false, explicitFolderName = '') 
       document.getElementById('packPercent').textContent = `${p}%`;
     });
 
-    zipFile.isZippedBundle   = true;
-    zipFile.originalCount    = files.length;
-    zipFile.folderLabel      = isFolderImport ? zipName.replace(/\.zip$/i, '') : `${files.length} files`;
+    zipFile.isZippedBundle = true;
+    zipFile.originalCount  = files.length;
+    zipFile.folderLabel    = isFolderImport ? zipName.replace(/\.zip$/i, '') : `${files.length} files`;
 
     sharedFiles = [zipFile];
     originalSource = files;
@@ -724,127 +713,141 @@ function startSharing() {
   if (qrBtn) qrBtn.textContent = '📱 QR Code';
 
   updateShareUI();
-  setShareStatus('yellow', '<span class="connecting-anim"></span>Setting up connection…');
+  setShareStatus('yellow', '<span class="connecting-anim"></span>Connecting to server…');
 
-  requestWakeLock();
+  // Start 29s heartbeat keep-awake
+  startKeepAwake();
   connDevices = {};
   initSharePeer(currentCode);
 }
 
 function initSharePeer(code) {
+  clearTimeout(reconnectDebounce);
+
+  intentionalDestroy = true;
   if (sharePeer) {
     try { sharePeer.destroy(); } catch (_) {}
     sharePeer = null;
   }
+  intentionalDestroy = false;
+
   const targetId = 'fshare-' + code;
+  const peer = new Peer(targetId, PEER_CONFIG);
+  sharePeer = peer;
 
-  createPeerWithFallback(
-    targetId,
-    (peer) => {
-      sharePeer = peer;
+  peer.on('open', (id) => {
+    console.log('[FileShare] Peer connected with ID:', id);
+    if (shareConns.length > 0) {
+      setShareStatus('green', `${shareConns.length} receiver(s) connected`);
+    } else {
       setShareStatus('yellow', 'Ready — share the code above');
-      startHeartbeat();
-
-      peer.on('connection', conn => {
-        shareConns.push(conn);
-        updatePeerCount();
-
-        conn.on('open', () => {
-          setShareStatus('green', `${shareConns.length} receiver(s) connected`);
-          sendManifest(conn);
-        });
-
-        conn.on('data', async data => {
-          if (data.type === 'hello') {
-            connDevices[conn.peer] = { name: data.name, browser: data.browser, icon: data.icon };
-            updateConnectedDevices();
-            return;
-          }
-          if (data.type === 'request')     await sendFile(conn, data.index);
-          if (data.type === 'request_all') { for (let i = 0; i < sharedFiles.length; i++) await sendFile(conn, i); }
-        });
-
-        conn.on('close', () => {
-          shareConns = shareConns.filter(c => c !== conn);
-          delete connDevices[conn.peer];
-          updatePeerCount();
-          updateConnectedDevices();
-          setShareStatus(shareConns.length ? 'green' : 'yellow',
-            shareConns.length ? `${shareConns.length} receiver(s) connected` : 'Waiting for receiver…');
-        });
-
-        conn.on('error', err => console.warn('conn err', err));
-      });
-
-      // Smooth auto-reconnect when tab drops socket in background
-      peer.on('disconnected', () => {
-        console.warn('[FileShare] Peer socket disconnected. Recovering…');
-        recoverSharePeer(code);
-      });
-
-      peer.on('error', err => {
-        console.warn('[FileShare] Share peer error:', err.type, err.message);
-
-        const isSocketDrop =
-          err.type === 'socket-closed' ||
-          err.type === 'socket-error' ||
-          err.type === 'network' ||
-          err.type === 'disconnected' ||
-          (err.message && err.message.toLowerCase().includes('lost connection'));
-
-        if (isSocketDrop) {
-          recoverSharePeer(code);
-          return;
-        }
-
-        if (err.type === 'unavailable-id') {
-          setTimeout(() => {
-            if (currentCode === code && !shareConns.length) {
-              initSharePeer(code);
-            }
-          }, 800);
-          return;
-        }
-
-        setShareStatus('red', 'Error: ' + escHtml(err.message));
-      });
-    },
-    (err) => {
-      setShareStatus('red', 'Signalling error: ' + escHtml(err.message));
     }
-  );
+  });
+
+  peer.on('connection', (conn) => {
+    shareConns.push(conn);
+    updatePeerCount();
+
+    conn.on('open', () => {
+      setShareStatus('green', `${shareConns.length} receiver(s) connected`);
+      sendManifest(conn);
+    });
+
+    conn.on('data', async (data) => {
+      // 29s P2P Keep-alive ping/pong
+      if (data.type === 'ping') {
+        try { conn.send({ type: 'pong' }); } catch (_) {}
+        return;
+      }
+      if (data.type === 'pong') return;
+
+      if (data.type === 'hello') {
+        connDevices[conn.peer] = { name: data.name, browser: data.browser, icon: data.icon };
+        updateConnectedDevices();
+        return;
+      }
+      if (data.type === 'request')     await sendFile(conn, data.index);
+      if (data.type === 'request_all') { for (let i = 0; i < sharedFiles.length; i++) await sendFile(conn, i); }
+    });
+
+    conn.on('close', () => {
+      shareConns = shareConns.filter(c => c !== conn);
+      delete connDevices[conn.peer];
+      updatePeerCount();
+      updateConnectedDevices();
+      setShareStatus(
+        shareConns.length ? 'green' : 'yellow',
+        shareConns.length ? `${shareConns.length} receiver(s) connected` : 'Ready — share the code above'
+      );
+    });
+
+    conn.on('error', err => console.warn('conn err', err));
+  });
+
+  peer.on('disconnected', () => {
+    if (intentionalDestroy) return;
+    console.warn('[FileShare] Peer disconnected from server.');
+    handleServerDisconnect(code);
+  });
+
+  peer.on('error', (err) => {
+    if (intentionalDestroy) return;
+    console.warn('[FileShare] Peer error:', err.type, err.message);
+
+    if (err.type === 'unavailable-id') {
+      setTimeout(() => {
+        if (currentCode === code && !shareConns.length && !intentionalDestroy) {
+          initSharePeer(code);
+        }
+      }, 1500);
+      return;
+    }
+
+    const isSocketDrop =
+      err.type === 'socket-closed' ||
+      err.type === 'socket-error' ||
+      err.type === 'network' ||
+      err.type === 'disconnected' ||
+      (err.message && err.message.toLowerCase().includes('lost connection'));
+
+    if (isSocketDrop) {
+      handleServerDisconnect(code);
+      return;
+    }
+
+    setShareStatus('red', 'Error: ' + escHtml(err.message));
+  });
 }
 
-function recoverSharePeer(code) {
-  if (currentCode !== code) return;
-  // If active direct P2P connection exists, transfer continues uninterrupted
-  if (shareConns.length > 0 && shareConns.some(c => c.open)) {
+function handleServerDisconnect(code) {
+  if (intentionalDestroy || currentCode !== code) return;
+
+  if (shareConns.length > 0) {
     setShareStatus('green', `${shareConns.length} receiver(s) connected (P2P direct)`);
+    if (sharePeer && !sharePeer.destroyed && sharePeer.disconnected) {
+      try { sharePeer.reconnect(); } catch (_) {}
+    }
     return;
   }
 
-  setShareStatus('yellow', '<span class="connecting-anim"></span> Reconnecting to server…');
+  setShareStatus('yellow', '<span class="connecting-anim"></span> Reconnecting…');
 
-  if (isRecovering) return;
-  isRecovering = true;
-
-  setTimeout(() => {
-    isRecovering = false;
-    if (currentCode !== code) return;
+  clearTimeout(reconnectDebounce);
+  reconnectDebounce = setTimeout(() => {
+    if (intentionalDestroy || currentCode !== code) return;
 
     if (sharePeer && !sharePeer.destroyed && sharePeer.disconnected) {
       try {
-        console.log('[FileShare] Reconnecting existing peer instance…');
+        console.log('[FileShare] Attempting sharePeer.reconnect()');
         sharePeer.reconnect();
         return;
       } catch (e) {
-        console.warn('[FileShare] peer.reconnect() error:', e);
+        console.warn('reconnect() failed:', e);
       }
     }
 
-    // Re-initialize using the EXACT SAME CODE
     initSharePeer(code);
-  }, 1000);
+  }, 1200);
 }
 
 function updateConnectedDevices() {
@@ -972,10 +975,15 @@ function removeFile(idx) {
 }
 
 function stopSharing() {
-  stopHeartbeat();
-  releaseWakeLock();
-  if (sharePeer) { try { sharePeer.destroy(); } catch(_) {} sharePeer = null; }
-  shareConns = []; sharedFiles = []; originalSource = []; currentCode = ''; connDevices = {}; isRecovering = false;
+  clearTimeout(reconnectDebounce);
+  intentionalDestroy = true;
+  stopKeepAwake();
+  if (sharePeer) {
+    try { sharePeer.destroy(); } catch (_) {}
+    sharePeer = null;
+  }
+  intentionalDestroy = false;
+  shareConns = []; sharedFiles = []; originalSource = []; currentCode = ''; connDevices = {};
   document.getElementById('share-packaging').style.display = 'none';
   document.getElementById('share-step1').style.display = 'block';
   document.getElementById('share-step2').style.display = 'none';
@@ -1056,67 +1064,77 @@ function connectToPeer() {
   if (!/^\d{6}$/.test(code)) { toast('⚠️ Enter a valid 6-digit code'); return; }
   const btn = document.getElementById('connectBtn');
   btn.disabled = true;
-  setRecvStatus('<span class="connecting-anim"></span>Connecting…');
+  setRecvStatus('<span class="connecting-anim"></span>Connecting to sender…');
   if (recvPeer) { try { recvPeer.destroy(); } catch(_) {} recvPeer = null; }
 
-  createPeerWithFallback(
-    null,
-    (peer) => {
-      recvPeer = peer;
-      setRecvStatus('<span class="connecting-anim"></span>Reaching sender…');
+  // Start 29s heartbeat keep-awake on receiving phone as well
+  startKeepAwake();
 
-      peer.on('disconnected', () => {
-        if (recvPeer && !recvPeer.destroyed && recvPeer.disconnected) {
-          try { recvPeer.reconnect(); } catch (_) {}
-        }
-      });
+  const peer = new Peer(PEER_CONFIG);
+  recvPeer = peer;
 
-      recvConn = recvPeer.connect('fshare-' + code, {
-        reliable: true,
-        metadata: { device: MY_DEVICE },
-      });
+  peer.on('open', () => {
+    setRecvStatus('<span class="connecting-anim"></span>Reaching sender…');
 
-      recvConn.on('open', () => {
-        setRecvStatus('✅ Connected! Ready to download…');
-        recvConn.send({
-          type:    'hello',
-          name:    MY_DEVICE.name,
-          browser: MY_DEVICE.browser,
-          icon:    MY_DEVICE.icon,
-        });
-      });
+    recvConn = peer.connect('fshare-' + code, {
+      reliable: true,
+      metadata: { device: MY_DEVICE },
+    });
 
-      recvConn.on('data', data => {
-        switch (data.type) {
-          case 'manifest':  onManifest(data); break;
-          case 'start':     onStart(data);    break;
-          case 'chunk':     onChunk(data);    break;
-          case 'done':      onDone(data);     break;
-        }
+    recvConn.on('open', () => {
+      setRecvStatus('✅ Connected! Ready to download…');
+      recvConn.send({
+        type:    'hello',
+        name:    MY_DEVICE.name,
+        browser: MY_DEVICE.browser,
+        icon:    MY_DEVICE.icon,
       });
+    });
 
-      recvConn.on('close', () => {
-        toast('🔌 Sender disconnected');
-        document.getElementById('recv-step1').style.display = 'block';
-        document.getElementById('recv-step2').style.display = 'none';
-        hideSenderCard();
-        btn.disabled = false;
-      });
-      recvConn.on('error', err => { setRecvStatus('❌ ' + err.message); btn.disabled = false; });
-    },
-    (err) => {
-      setRecvStatus('❌ ' + (err.type === 'peer-unavailable'
-        ? 'Sender not found. Check the code and ensure sender is online.'
-        : err.message));
+    recvConn.on('data', data => {
+      // 29s P2P Keep-alive ping/pong
+      if (data.type === 'ping') {
+        try { recvConn.send({ type: 'pong' }); } catch (_) {}
+        return;
+      }
+      if (data.type === 'pong') return;
+
+      switch (data.type) {
+        case 'manifest':  onManifest(data); break;
+        case 'start':     onStart(data);    break;
+        case 'chunk':     onChunk(data);    break;
+        case 'done':      onDone(data);     break;
+      }
+    });
+
+    recvConn.on('close', () => {
+      toast('🔌 Sender disconnected');
+      document.getElementById('recv-step1').style.display = 'block';
+      document.getElementById('recv-step2').style.display = 'none';
+      hideSenderCard();
       btn.disabled = false;
-    }
-  );
+      stopKeepAwake();
+    });
+
+    recvConn.on('error', err => {
+      setRecvStatus('❌ ' + err.message);
+      btn.disabled = false;
+    });
+  });
+
+  peer.on('error', (err) => {
+    setRecvStatus('❌ ' + (err.type === 'peer-unavailable'
+      ? 'Sender not found. Check the code and ensure sender is online.'
+      : err.message));
+    btn.disabled = false;
+    stopKeepAwake();
+  });
 }
 
 function onManifest(data) {
   recvFiles = data.files;
   document.getElementById('recvSourceLabel').textContent = data.label || '📁 Shared File';
-  document.getElementById('recvFileCountLabel').textContent = recvFiles.length === 1 ? 'FILE AVAILABLE' : `FILES AVAILABLE (${recvFiles.length})`;
+  document.getElementById('recvFileCountLabel').textContent = recvFiles.length === 1 ? 'FILE READY' : `FILES READY (${recvFiles.length})`;
   document.getElementById('recv-step1').style.display = 'none';
   document.getElementById('recv-step2').style.display = 'block';
 
@@ -1264,6 +1282,7 @@ function setRecvStatus(htmlMsg) {
 }
 
 function disconnectRecv() {
+  stopKeepAwake();
   if (recvConn) { try { recvConn.close(); } catch(_) {} recvConn = null; }
   if (recvPeer) { try { recvPeer.destroy(); } catch(_) {} recvPeer = null; }
   recvFiles = []; recvBufs = {};
