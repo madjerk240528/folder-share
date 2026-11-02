@@ -73,6 +73,13 @@
     .code-input-row input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 12px 16px; font-size: 1.5rem; font-weight: 700; letter-spacing: 10px; text-align: center; font-family: monospace; outline: none; transition: border-color .15s; }
     .code-input-row input:focus { border-color: var(--accent); }
 
+    /* Device name card on receiver */
+    .device-card { display: flex; align-items: center; gap: 12px; background: rgba(0,212,170,0.08); border: 1px solid rgba(0,212,170,0.3); border-radius: 12px; padding: 14px 18px; margin-bottom: 4px; }
+    .device-card .dc-icon { font-size: 2rem; flex-shrink: 0; }
+    .device-card .dc-info { min-width: 0; }
+    .device-card .dc-name { font-size: 1rem; font-weight: 700; color: var(--green); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .device-card .dc-sub  { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+
     /* File list */
     .file-list { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; padding-right: 4px; }
     .file-list::-webkit-scrollbar { width: 4px; }
@@ -102,6 +109,10 @@
     .dot-green  { background: var(--green);  box-shadow: 0 0 6px var(--green); }
     .dot-yellow { background: #ffd700; box-shadow: 0 0 6px #ffd700; }
     .dot-red    { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+
+    /* Connecting spinner */
+    .connecting-anim { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin-right: 6px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Info box */
     .info-box { background: rgba(108,99,255,0.1); border: 1px solid rgba(108,99,255,0.3); border-radius: 10px; padding: 14px 16px; font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
@@ -153,7 +164,7 @@
   </div>
   <div class="perf-box">
     <div class="ph">⚡ High-Speed Transfer Engine</div>
-    <strong>256 KB chunks</strong> · <strong>Smart flow control</strong> · <strong>6 STUN servers</strong> for direct P2P · <strong>Zero artificial delays</strong><br>
+    <strong>256 KB chunks</strong> · <strong>Smart flow control</strong> · <strong>7 STUN servers</strong> for direct P2P · <strong>Fast connect</strong> via multi-server fallback<br>
     <span style="color:var(--muted)">On a fast LAN or internet connection, expect speeds of <strong style="color:var(--green)">50–500 MB/s</strong> peer-to-peer.</span>
   </div>
   <div class="info-box">
@@ -171,7 +182,7 @@
         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
         onclick="document.getElementById('fileInput').click()">
         <div class="dz-icon">📂</div>
-        <div class="dz-text">Drag & drop files or a folder here</div>
+        <div class="dz-text">Drag &amp; drop files or a folder here</div>
         <div class="dz-sub">Supports every format — PDF, MP4, ZIP, EXE, APK, PSD, and more</div>
         <div class="pick-btns" onclick="event.stopPropagation()">
           <button class="btn btn-primary btn-sm" onclick="document.getElementById('fileInput').click()">📄 Select Files</button>
@@ -204,6 +215,9 @@
         <span id="statusText">Setting up…</span>
       </div>
 
+      <!-- Connected receivers list -->
+      <div id="connectedDevices" style="display:none; margin-top:12px;"></div>
+
       <hr class="divider" style="margin:18px 0;" />
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
         <div style="font-size:0.9rem; font-weight:600; color:var(--muted);" id="shareListLabel">FILES</div>
@@ -234,7 +248,16 @@
     </div>
 
     <div id="recv-step2" style="display:none; margin-top:18px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+      <!-- Sender device card -->
+      <div id="senderDeviceCard" class="device-card" style="display:none;">
+        <div class="dc-icon" id="senderDeviceIcon">💻</div>
+        <div class="dc-info">
+          <div class="dc-name" id="senderDeviceName">Unknown Device</div>
+          <div class="dc-sub" id="senderDeviceSub">Connected · Sharing files</div>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px; margin-top:14px;">
         <div class="folder-badge" id="recvSourceLabel">📁 Shared Files</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="btn btn-green btn-sm" onclick="downloadAll()">⬇ Download All</button>
@@ -272,7 +295,67 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.cloudflare.com:3478'     },
 ];
 
-const PEER_CONFIG = { debug: 0, config: { iceServers: ICE_SERVERS } };
+// ── PeerJS servers with automatic fallback ──
+// Try primary first; if it fails within 4s, fall back to backup
+const PEER_SERVERS = [
+  { host: '0.peerjs.com', port: 443, path: '/', secure: true  }, // peerjs.com CDN (fastest)
+  { host: 'peer.miragejs.com', port: 443, path: '/', secure: true }, // community mirror
+  null, // null = PeerJS default (last resort)
+];
+
+const BASE_PEER_CONFIG = {
+  debug: 0,
+  config: {
+    iceServers: ICE_SERVERS,
+    iceCandidatePoolSize: 10,   // pre-gather ICE candidates → faster connection
+  }
+};
+
+// ══════════════════════════════════════════════════════
+//  DEVICE IDENTITY  — detect sender's device name
+// ══════════════════════════════════════════════════════
+function getDeviceInfo() {
+  const ua  = navigator.userAgent;
+  const plat = navigator.platform || '';
+
+  // OS detection
+  let os = 'Unknown OS';
+  if (/Windows NT 10/.test(ua))     os = 'Windows 11/10';
+  else if (/Windows NT 6\.3/.test(ua)) os = 'Windows 8.1';
+  else if (/Windows/.test(ua))      os = 'Windows';
+  else if (/iPhone/.test(ua))       os = 'iPhone';
+  else if (/iPad/.test(ua))         os = 'iPad';
+  else if (/Android/.test(ua) && /Mobile/.test(ua)) os = 'Android Phone';
+  else if (/Android/.test(ua))      os = 'Android Tablet';
+  else if (/Mac OS X/.test(ua) && !/Mobile/.test(ua)) os = 'Mac';
+  else if (/Linux/.test(ua))        os = 'Linux';
+  else if (/CrOS/.test(ua))         os = 'Chromebook';
+
+  // Browser detection
+  let browser = 'Browser';
+  if (/Edg\//.test(ua))        browser = 'Edge';
+  else if (/OPR\//.test(ua))   browser = 'Opera';
+  else if (/Chrome\//.test(ua)) browser = 'Chrome';
+  else if (/Firefox\//.test(ua)) browser = 'Firefox';
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+
+  // Device icon
+  let icon = '💻';
+  if (/iPhone/.test(ua))  icon = '📱';
+  else if (/iPad/.test(ua)) icon = '📱';
+  else if (/Android/.test(ua) && /Mobile/.test(ua)) icon = '📱';
+  else if (/Android/.test(ua)) icon = '📟';
+  else if (/Mac/.test(os)) icon = '🖥️';
+
+  return {
+    name: os,          // e.g. "Windows 11/10", "iPhone", "Mac"
+    browser,           // e.g. "Chrome", "Firefox"
+    icon,              // emoji icon
+    label: `${os} · ${browser}`,  // full label
+  };
+}
+
+const MY_DEVICE = getDeviceInfo();
 
 // ══════════════════════════════════════════════════════
 //  UTILITIES
@@ -323,7 +406,7 @@ function fileIcon(name) {
     mp4:'🎬', mkv:'🎬', avi:'🎬', mov:'🎬', wmv:'🎬', flv:'🎬', webm:'🎬', m4v:'🎬', ts:'🎬', vob:'🎬',
     mp3:'🎵', wav:'🎵', flac:'🎵', aac:'🎵', ogg:'🎵', m4a:'🎵', wma:'🎵', opus:'🎵', aiff:'🎵',
     zip:'🗜️', rar:'🗜️', '7z':'🗜️', tar:'🗜️', gz:'🗜️', bz2:'🗜️', xz:'🗜️', iso:'🗜️', dmg:'🗜️',
-    js:'💻', ts:'💻', py:'💻', html:'💻', css:'💻', json:'💻', java:'💻', c:'💻', cpp:'💻', cs:'💻', go:'💻', rs:'💻', php:'💻', rb:'💻', swift:'💻', kt:'💻', sh:'💻', bat:'💻',
+    js:'💻', py:'💻', html:'💻', css:'💻', json:'💻', java:'💻', c:'💻', cpp:'💻', cs:'💻', go:'💻', rs:'💻', php:'💻', rb:'💻', swift:'💻', kt:'💻', sh:'💻', bat:'💻',
     exe:'⚙️', msi:'⚙️', apk:'📱', ipa:'📱', deb:'⚙️', rpm:'⚙️',
     txt:'📃', md:'📃', xml:'📃', log:'📃', yaml:'📃', yml:'📃', ini:'📃', cfg:'📃', toml:'📃',
     ttf:'🔤', otf:'🔤', woff:'🔤', woff2:'🔤',
@@ -334,6 +417,57 @@ function fileIcon(name) {
 }
 
 function genCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
+
+// ══════════════════════════════════════════════════════
+//  FAST PEER FACTORY  — tries servers in order with timeout
+// ══════════════════════════════════════════════════════
+function createPeerWithFallback(peerId, onReady, onError) {
+  let serverIdx = 0;
+  let peer = null;
+  let timeoutHandle = null;
+
+  function tryNext() {
+    if (peer) { try { peer.destroy(); } catch(_) {} peer = null; }
+    if (serverIdx >= PEER_SERVERS.length) {
+      onError(new Error('Could not connect to any signalling server'));
+      return;
+    }
+
+    const srv = PEER_SERVERS[serverIdx++];
+    const cfg = { ...BASE_PEER_CONFIG };
+    if (srv) {
+      cfg.host   = srv.host;
+      cfg.port   = srv.port;
+      cfg.path   = srv.path;
+      cfg.secure = srv.secure;
+    }
+
+    peer = peerId ? new Peer(peerId, cfg) : new Peer(cfg);
+
+    // Timeout: if not open in 4s, try next server
+    timeoutHandle = setTimeout(() => {
+      console.warn('[FileShare] Signalling server timeout, trying next…');
+      tryNext();
+    }, 4000);
+
+    peer.on('open', id => {
+      clearTimeout(timeoutHandle);
+      onReady(peer, id);
+    });
+
+    peer.on('error', err => {
+      clearTimeout(timeoutHandle);
+      if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+        console.warn('[FileShare] Server error, trying next…', err.type);
+        tryNext();
+      } else {
+        onError(err);
+      }
+    });
+  }
+
+  tryNext();
+}
 
 // ══════════════════════════════════════════════════════
 //  DRAG & DROP
@@ -371,10 +505,11 @@ async function onDrop(e) {
 // ══════════════════════════════════════════════════════
 //  SHARE SIDE
 // ══════════════════════════════════════════════════════
-let sharedFiles = [];
-let sharePeer   = null;
-let shareConns  = [];
-let currentCode = '';
+let sharedFiles   = [];
+let sharePeer     = null;
+let shareConns    = [];
+let currentCode   = '';
+let connDevices   = {};  // peerId → { name, browser, icon }
 
 function onFilesSelected(list) {
   const files = Array.from(list);
@@ -389,46 +524,83 @@ function startSharing() {
   document.getElementById('share-step2').style.display = 'block';
   document.getElementById('shareCode').textContent = currentCode;
   updateShareUI();
-  setShareStatus('yellow', 'Setting up connection…');
+  setShareStatus('yellow', '<span class="connecting-anim"></span>Setting up connection…');
 
   if (sharePeer) { try { sharePeer.destroy(); } catch(_) {} }
-  sharePeer = new Peer('fshare-' + currentCode, PEER_CONFIG);
+  connDevices = {};
 
-  sharePeer.on('open', () => setShareStatus('yellow', 'Ready — share the code above'));
+  createPeerWithFallback(
+    'fshare-' + currentCode,
+    (peer) => {
+      sharePeer = peer;
+      setShareStatus('yellow', 'Ready — share the code above');
 
-  sharePeer.on('connection', conn => {
-    shareConns.push(conn);
-    updatePeerCount();
+      peer.on('connection', conn => {
+        shareConns.push(conn);
+        updatePeerCount();
 
-    conn.on('open', () => {
-      setShareStatus('green', `${shareConns.length} receiver(s) connected`);
-      sendManifest(conn);
-    });
+        conn.on('open', () => {
+          setShareStatus('green', `${shareConns.length} receiver(s) connected`);
+          // Send manifest with our device info
+          sendManifest(conn);
+        });
 
-    conn.on('data', async data => {
-      if (data.type === 'request')     await sendFile(conn, data.index);
-      if (data.type === 'request_all') { for (let i = 0; i < sharedFiles.length; i++) await sendFile(conn, i); }
-    });
+        conn.on('data', async data => {
+          // Receiver announces itself
+          if (data.type === 'hello') {
+            connDevices[conn.peer] = { name: data.name, browser: data.browser, icon: data.icon };
+            updateConnectedDevices();
+            return;
+          }
+          if (data.type === 'request')     await sendFile(conn, data.index);
+          if (data.type === 'request_all') { for (let i = 0; i < sharedFiles.length; i++) await sendFile(conn, i); }
+        });
 
-    conn.on('close', () => {
-      shareConns = shareConns.filter(c => c !== conn);
-      updatePeerCount();
-      setShareStatus(shareConns.length ? 'green' : 'yellow', shareConns.length ? `${shareConns.length} receiver(s) connected` : 'Disconnected — waiting for new connection…');
-    });
+        conn.on('close', () => {
+          shareConns = shareConns.filter(c => c !== conn);
+          delete connDevices[conn.peer];
+          updatePeerCount();
+          updateConnectedDevices();
+          setShareStatus(shareConns.length ? 'green' : 'yellow', shareConns.length ? `${shareConns.length} receiver(s) connected` : 'Waiting for receiver…');
+        });
 
-    conn.on('error', err => console.warn('conn err', err));
-  });
+        conn.on('error', err => console.warn('conn err', err));
+      });
 
-  sharePeer.on('error', err => {
-    if (err.type === 'unavailable-id') { setTimeout(startSharing, 400); }
-    else setShareStatus('red', 'Error: ' + err.message);
-  });
+      peer.on('error', err => {
+        if (err.type === 'unavailable-id') { setTimeout(startSharing, 400); }
+        else setShareStatus('red', 'Error: ' + err.message);
+      });
+    },
+    (err) => {
+      setShareStatus('red', 'Signalling failed: ' + err.message);
+    }
+  );
+}
+
+function updateConnectedDevices() {
+  const box = document.getElementById('connectedDevices');
+  const devices = Object.values(connDevices);
+  if (!devices.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = devices.map(d => `
+    <div class="device-card" style="margin-bottom:8px;">
+      <div class="dc-icon">${d.icon}</div>
+      <div class="dc-info">
+        <div class="dc-name">${escHtml(d.name)}</div>
+        <div class="dc-sub">${escHtml(d.browser)} · Receiving</div>
+      </div>
+    </div>`).join('');
 }
 
 function sendManifest(conn) {
   conn.send({
     type: 'manifest',
     label: getSourceLabel(),
+    // Send sender device info so receiver can display it
+    senderName:    MY_DEVICE.name,
+    senderBrowser: MY_DEVICE.browser,
+    senderIcon:    MY_DEVICE.icon,
     files: sharedFiles.map((f, i) => ({
       index: i, name: f.name, size: f.size,
       type: f.type || 'application/octet-stream',
@@ -493,9 +665,9 @@ function updatePeerCount() {
   document.getElementById('peerCountDisplay').textContent = n > 0 ? `👥 ${n} connected` : '';
 }
 
-function setShareStatus(color, msg) {
+function setShareStatus(color, htmlMsg) {
   document.getElementById('statusDot').className = 'status-dot dot-' + color;
-  document.getElementById('statusText').textContent = msg;
+  document.getElementById('statusText').innerHTML = htmlMsg;
 }
 
 function renderShareFileList() {
@@ -505,8 +677,8 @@ function renderShareFileList() {
         <div class="fi-left">
           <span class="fi-icon">${fileIcon(f.name)}</span>
           <div class="fi-info">
-            <div class="fi-name">${f.name}</div>
-            <div class="fi-meta">${f.webkitRelativePath || f.type || 'file'}</div>
+            <div class="fi-name">${escHtml(f.name)}</div>
+            <div class="fi-meta">${escHtml(f.webkitRelativePath || f.type || 'file')}</div>
           </div>
         </div>
         <div class="fi-right">
@@ -535,9 +707,10 @@ function onMoreFilesAdded(list) {
 
 function stopSharing() {
   if (sharePeer) { try { sharePeer.destroy(); } catch(_) {} sharePeer = null; }
-  shareConns = []; sharedFiles = []; currentCode = '';
+  shareConns = []; sharedFiles = []; currentCode = ''; connDevices = {};
   document.getElementById('share-step1').style.display = 'block';
   document.getElementById('share-step2').style.display = 'none';
+  document.getElementById('connectedDevices').style.display = 'none';
   ['fileInput','folderInput'].forEach(id => { try { document.getElementById(id).value = ''; } catch(_) {} });
 }
 
@@ -560,41 +733,56 @@ function connectToPeer() {
   if (!/^\d{6}$/.test(code)) { toast('⚠️ Enter a valid 6-digit code'); return; }
   const btn = document.getElementById('connectBtn');
   btn.disabled = true;
-  setRecvStatus('🔄 Connecting…');
+  setRecvStatus('<span class="connecting-anim"></span>Connecting…');
   if (recvPeer) { try { recvPeer.destroy(); } catch(_) {} recvPeer = null; }
 
-  recvPeer = new Peer('fshare-r-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), PEER_CONFIG);
+  createPeerWithFallback(
+    null,  // auto-assign ID for receiver
+    (peer) => {
+      recvPeer = peer;
+      setRecvStatus('<span class="connecting-anim"></span>Reaching sender…');
 
-  recvPeer.on('open', () => {
-    setRecvStatus('🔄 Reaching sender…');
-    recvConn = recvPeer.connect('fshare-' + code, { reliable: true });
+      recvConn = recvPeer.connect('fshare-' + code, {
+        reliable: true,
+        metadata: { device: MY_DEVICE },
+      });
 
-    recvConn.on('open', () => setRecvStatus('✅ Connected! Loading file list…'));
+      recvConn.on('open', () => {
+        setRecvStatus('✅ Connected! Loading file list…');
+        // Announce our device to the sender
+        recvConn.send({
+          type:    'hello',
+          name:    MY_DEVICE.name,
+          browser: MY_DEVICE.browser,
+          icon:    MY_DEVICE.icon,
+        });
+      });
 
-    recvConn.on('data', data => {
-      switch (data.type) {
-        case 'manifest':  onManifest(data); break;
-        case 'start':     onStart(data);    break;
-        case 'chunk':     onChunk(data);    break;
-        case 'done':      onDone(data);     break;
-      }
-    });
+      recvConn.on('data', data => {
+        switch (data.type) {
+          case 'manifest':  onManifest(data); break;
+          case 'start':     onStart(data);    break;
+          case 'chunk':     onChunk(data);    break;
+          case 'done':      onDone(data);     break;
+        }
+      });
 
-    recvConn.on('close', () => {
-      toast('🔌 Sender disconnected');
-      document.getElementById('recv-step1').style.display = 'block';
-      document.getElementById('recv-step2').style.display = 'none';
+      recvConn.on('close', () => {
+        toast('🔌 Sender disconnected');
+        document.getElementById('recv-step1').style.display = 'block';
+        document.getElementById('recv-step2').style.display = 'none';
+        hideSenderCard();
+        btn.disabled = false;
+      });
+      recvConn.on('error', err => { setRecvStatus('❌ ' + err.message); btn.disabled = false; });
+    },
+    (err) => {
+      setRecvStatus('❌ ' + (err.type === 'peer-unavailable'
+        ? 'Sender not found. Check the code and ensure sender is online.'
+        : err.message));
       btn.disabled = false;
-    });
-    recvConn.on('error', err => { setRecvStatus('❌ ' + err.message); btn.disabled = false; });
-  });
-
-  recvPeer.on('error', err => {
-    setRecvStatus(err.type === 'peer-unavailable'
-      ? '❌ Sender not found. Check the code and ensure sender is online.'
-      : '❌ ' + err.message);
-    btn.disabled = false;
-  });
+    }
+  );
 }
 
 function onManifest(data) {
@@ -603,7 +791,20 @@ function onManifest(data) {
   document.getElementById('recvFileCountLabel').textContent = `FILES AVAILABLE (${recvFiles.length})`;
   document.getElementById('recv-step1').style.display = 'none';
   document.getElementById('recv-step2').style.display = 'block';
+
+  // Show sender device card
+  if (data.senderName) {
+    document.getElementById('senderDeviceIcon').textContent = data.senderIcon || '💻';
+    document.getElementById('senderDeviceName').textContent = data.senderName;
+    document.getElementById('senderDeviceSub').textContent  = `${data.senderBrowser || 'Browser'} · Sharing ${recvFiles.length} file${recvFiles.length !== 1 ? 's' : ''}`;
+    document.getElementById('senderDeviceCard').style.display = 'flex';
+  }
+
   renderRecvFileList(recvFiles);
+}
+
+function hideSenderCard() {
+  document.getElementById('senderDeviceCard').style.display = 'none';
 }
 
 function onStart(data) {
@@ -677,8 +878,8 @@ function renderRecvFileList(files) {
         <div class="fi-left">
           <span class="fi-icon">${fileIcon(f.name)}</span>
           <div class="fi-info">
-            <div class="fi-name">${f.name}</div>
-            <div class="fi-meta">${f.path !== f.name ? f.path + ' · ' : ''}${f.type || 'file'}</div>
+            <div class="fi-name">${escHtml(f.name)}</div>
+            <div class="fi-meta">${f.path !== f.name ? escHtml(f.path) + ' · ' : ''}${escHtml(f.type || 'file')}</div>
           </div>
         </div>
         <div class="fi-right">
@@ -721,7 +922,9 @@ function triggerDownload(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 
-function setRecvStatus(msg) { document.getElementById('recv-connect-status').textContent = msg; }
+function setRecvStatus(htmlMsg) {
+  document.getElementById('recv-connect-status').innerHTML = htmlMsg;
+}
 
 function disconnectRecv() {
   if (recvConn) { try { recvConn.close(); } catch(_) {} recvConn = null; }
@@ -731,7 +934,13 @@ function disconnectRecv() {
   document.getElementById('recv-step2').style.display = 'none';
   document.getElementById('connectBtn').disabled = false;
   document.getElementById('codeInput').value = '';
+  hideSenderCard();
   setRecvStatus('');
+}
+
+// ── XSS guard ──
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 window.addEventListener('DOMContentLoaded', () => {
