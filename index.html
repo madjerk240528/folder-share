@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FileShare – High-Speed P2P Sharing</title>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     :root {
       --bg: #0f1117; --surface: #1a1d2e; --card: #21253a; --border: #2e3250;
@@ -134,41 +135,42 @@
 <body>
 
 <nav>
-  <div class="logo">⚡ File<span>Share</span> <span class="badge">P2P</span><span class="speed-badge">High Speed</span></div>
-  <div style="font-size:0.78rem;color:var(--muted)">Every format • Direct P2P • No uploads</div>
+  <div class="logo">⚡ File<span>Share</span> <span class="badge">P2P</span><span class="speed-badge">Auto-ZIP Folders</span></div>
+  <div style="font-size:0.78rem;color:var(--muted)">1 File Direct • Folders to Single ZIP • Direct P2P</div>
 </nav>
 
 <!-- ══════════════ HOME ══════════════ -->
 <div class="page active" id="page-home">
   <div class="hero">
     <h1>Share <em>anything</em> with<br>a 6-digit code</h1>
-    <p>Files, folders, videos, ZIPs, APKs — every format. High-speed peer-to-peer. No server.</p>
+    <p>Single files share as-is. Multiple files or folders auto-pack into 1 ZIP. High-speed peer-to-peer.</p>
     <div class="format-tags">
-      <span class="format-tag">📄 PDF DOCX</span><span class="format-tag">🎬 MP4 MKV AVI</span><span class="format-tag">🖼️ JPG PNG RAW</span>
-      <span class="format-tag">🎵 MP3 FLAC WAV</span><span class="format-tag">🗜️ ZIP RAR 7Z ISO</span><span class="format-tag">📁 Folders</span>
+      <span class="format-tag">📄 1-File Direct (No ZIP)</span><span class="format-tag">🗜️ Folders Auto-Packed to Single ZIP</span>
+      <span class="format-tag">🎬 MP4 MKV AVI</span><span class="format-tag">🖼️ JPG PNG RAW</span>
+      <span class="format-tag">🎵 MP3 FLAC WAV</span><span class="format-tag">📁 Whole Folder Trees</span>
       <span class="format-tag">⚙️ EXE MSI APK</span><span class="format-tag">💻 Any Code file</span><span class="format-tag">📊 XLSX CSV</span>
-      <span class="format-tag">🎨 PSD AI Figma</span><span class="format-tag">🗃️ DB SQL</span><span class="format-tag">+ Every other format</span>
+      <span class="format-tag">🎨 PSD AI Figma</span><span class="format-tag">+ Every other format</span>
     </div>
   </div>
   <div class="cards">
     <div class="card" onclick="goShare()">
       <div class="icon">📤</div>
       <h2>Send Files / Folder</h2>
-      <p>Pick any files or a whole folder. Get a 6-digit code instantly. Code refreshes every session.</p>
+      <p>Select 1 file (shares directly) or a folder/multiple files (auto-packs into a single ZIP). Get a 6-digit code.</p>
     </div>
     <div class="card" onclick="goReceive()">
       <div class="icon">📥</div>
       <h2>Receive Files</h2>
-      <p>Enter the 6-digit code from the sender to browse and download at full speed.</p>
+      <p>Enter the 6-digit code from the sender to download at full speed in 1 click.</p>
     </div>
   </div>
   <div class="perf-box">
     <div class="ph">⚡ High-Speed Transfer Engine</div>
-    <strong>256 KB chunks</strong> · <strong>Smart flow control</strong> · <strong>7 STUN servers</strong> for direct P2P · <strong>Fast connect</strong> via multi-server fallback<br>
+    <strong>1-file direct streaming</strong> · <strong>Instant single-ZIP packaging for folders</strong> · <strong>256 KB chunks</strong> · <strong>7 STUN servers</strong><br>
     <span style="color:var(--muted)">On a fast LAN or internet connection, expect speeds of <strong style="color:var(--green)">50–500 MB/s</strong> peer-to-peer.</span>
   </div>
   <div class="info-box">
-    🔒 <strong>How it works:</strong> Files go directly between your devices using WebRTC. Nothing is stored on any server. The 6-digit code changes every session for security.
+    🔒 <strong>How it works:</strong> If you select 1 file, it sends directly without zipping. If you select multiple files or import a folder, it automatically packs them into a single <code>.zip</code> file preserving subdirectories. Everything transfers directly between devices.
   </div>
 </div>
 
@@ -177,20 +179,32 @@
   <button class="back-btn" onclick="goHome()">← Back</button>
   <div class="section">
     <h2>📤 Send Files or Folder</h2>
+    
     <div id="share-step1">
       <div class="drop-zone" id="dropZone"
         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
         onclick="document.getElementById('fileInput').click()">
         <div class="dz-icon">📂</div>
         <div class="dz-text">Drag &amp; drop files or a folder here</div>
-        <div class="dz-sub">Supports every format — PDF, MP4, ZIP, EXE, APK, PSD, and more</div>
+        <div class="dz-sub">1 file stays as-is · Multiple files or folder auto-convert to 1 ZIP archive</div>
         <div class="pick-btns" onclick="event.stopPropagation()">
-          <button class="btn btn-primary btn-sm" onclick="document.getElementById('fileInput').click()">📄 Select Files</button>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('fileInput').click()">📄 Select File(s)</button>
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('folderInput').click()">📁 Select Folder</button>
         </div>
       </div>
-      <input type="file" id="fileInput"   multiple              onchange="onFilesSelected(this.files)" />
-      <input type="file" id="folderInput" multiple webkitdirectory onchange="onFilesSelected(this.files)" />
+      <input type="file" id="fileInput"   multiple              onchange="onFilesSelected(this.files, false)" />
+      <input type="file" id="folderInput" multiple webkitdirectory onchange="onFilesSelected(this.files, true)" />
+    </div>
+
+    <!-- Packaging Progress (When multiple files or folder selected) -->
+    <div id="share-packaging" style="display:none; text-align:center; padding:36px 16px;">
+      <div style="font-size:2.8rem; margin-bottom:10px;">🗜️</div>
+      <div style="font-size:1.15rem; font-weight:700; margin-bottom:4px;" id="packTitle">Packaging into single ZIP…</div>
+      <div style="color:var(--muted); font-size:0.85rem; margin-bottom:20px;" id="packSub">Converting files into a single ZIP for fast high-speed transfer</div>
+      <div class="progress-bar" style="height:6px; max-width:320px; margin:0 auto;">
+        <div class="progress-fill" id="packFill" style="width:0%"></div>
+      </div>
+      <div style="margin-top:10px; font-size:0.85rem; color:var(--accent); font-weight:700;" id="packPercent">0%</div>
     </div>
 
     <div id="share-step2" style="display:none; margin-top:4px;">
@@ -220,7 +234,7 @@
 
       <hr class="divider" style="margin:18px 0;" />
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-        <div style="font-size:0.9rem; font-weight:600; color:var(--muted);" id="shareListLabel">FILES</div>
+        <div style="font-size:0.9rem; font-weight:600; color:var(--muted);" id="shareListLabel">FILE TO SHARE</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('addMoreInput').click()">➕ Add More</button>
           <button class="btn btn-danger btn-sm" onclick="stopSharing()">⛔ Stop</button>
@@ -253,25 +267,25 @@
         <div class="dc-icon" id="senderDeviceIcon">💻</div>
         <div class="dc-info">
           <div class="dc-name" id="senderDeviceName">Unknown Device</div>
-          <div class="dc-sub" id="senderDeviceSub">Connected · Sharing files</div>
+          <div class="dc-sub" id="senderDeviceSub">Connected · Ready to transfer</div>
         </div>
       </div>
 
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px; margin-top:14px;">
-        <div class="folder-badge" id="recvSourceLabel">📁 Shared Files</div>
+        <div class="folder-badge" id="recvSourceLabel">📁 Shared File</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
-          <button class="btn btn-green btn-sm" onclick="downloadAll()">⬇ Download All</button>
+          <button class="btn btn-green btn-sm" id="recvDownloadMainBtn" onclick="downloadAll()">⬇ Download</button>
           <button class="btn btn-outline btn-sm" onclick="disconnectRecv()">✖ Disconnect</button>
         </div>
       </div>
-      <div style="margin-bottom:10px; font-size:0.9rem; font-weight:600; color:var(--muted);" id="recvFileCountLabel">FILES AVAILABLE</div>
+      <div style="margin-bottom:10px; font-size:0.9rem; font-weight:600; color:var(--muted);" id="recvFileCountLabel">FILE READY</div>
       <div class="file-list" id="recvFileList"></div>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
-<input type="file" id="addMoreInput" multiple onchange="onMoreFilesAdded(this.files)" style="display:none" />
+<input type="file" id="addMoreInput" multiple onchange="onMoreFilesAdded(this.files, false)" style="display:none" />
 
 <script>
 'use strict';
@@ -284,7 +298,7 @@ const HIGH_WATER   = 8  * 1024 * 1024;  // 8 MB — pause sending
 const LOW_WATER    = 2  * 1024 * 1024;  // 2 MB — resume sending
 const SPEED_WINDOW = 1000;              // speed sample window ms
 
-// Multiple STUN servers → best chance of direct P2P (not relayed)
+// Multiple STUN servers → direct P2P
 const ICE_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302'      },
   { urls: 'stun:stun1.l.google.com:19302'     },
@@ -295,43 +309,38 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.cloudflare.com:3478'     },
 ];
 
-// ── PeerJS servers with automatic fallback ──
-// Try primary first; if it fails within 4s, fall back to backup
+// PeerJS signalling fallback
 const PEER_SERVERS = [
-  { host: '0.peerjs.com', port: 443, path: '/', secure: true  }, // peerjs.com CDN (fastest)
-  { host: 'peer.miragejs.com', port: 443, path: '/', secure: true }, // community mirror
-  null, // null = PeerJS default (last resort)
+  { host: '0.peerjs.com', port: 443, path: '/', secure: true  },
+  { host: 'peer.miragejs.com', port: 443, path: '/', secure: true },
+  null,
 ];
 
 const BASE_PEER_CONFIG = {
   debug: 0,
   config: {
     iceServers: ICE_SERVERS,
-    iceCandidatePoolSize: 10,   // pre-gather ICE candidates → faster connection
+    iceCandidatePoolSize: 10,
   }
 };
 
 // ══════════════════════════════════════════════════════
-//  DEVICE IDENTITY  — detect sender's device name
+//  DEVICE IDENTITY
 // ══════════════════════════════════════════════════════
 function getDeviceInfo() {
-  const ua  = navigator.userAgent;
-  const plat = navigator.platform || '';
-
-  // OS detection
+  const ua = navigator.userAgent;
   let os = 'Unknown OS';
-  if (/Windows NT 10/.test(ua))     os = 'Windows 11/10';
+  if (/Windows NT 10/.test(ua))        os = 'Windows 11/10';
   else if (/Windows NT 6\.3/.test(ua)) os = 'Windows 8.1';
-  else if (/Windows/.test(ua))      os = 'Windows';
-  else if (/iPhone/.test(ua))       os = 'iPhone';
-  else if (/iPad/.test(ua))         os = 'iPad';
+  else if (/Windows/.test(ua))         os = 'Windows';
+  else if (/iPhone/.test(ua))          os = 'iPhone';
+  else if (/iPad/.test(ua))            os = 'iPad';
   else if (/Android/.test(ua) && /Mobile/.test(ua)) os = 'Android Phone';
-  else if (/Android/.test(ua))      os = 'Android Tablet';
+  else if (/Android/.test(ua))         os = 'Android Tablet';
   else if (/Mac OS X/.test(ua) && !/Mobile/.test(ua)) os = 'Mac';
-  else if (/Linux/.test(ua))        os = 'Linux';
-  else if (/CrOS/.test(ua))         os = 'Chromebook';
+  else if (/Linux/.test(ua))           os = 'Linux';
+  else if (/CrOS/.test(ua))            os = 'Chromebook';
 
-  // Browser detection
   let browser = 'Browser';
   if (/Edg\//.test(ua))        browser = 'Edge';
   else if (/OPR\//.test(ua))   browser = 'Opera';
@@ -339,20 +348,12 @@ function getDeviceInfo() {
   else if (/Firefox\//.test(ua)) browser = 'Firefox';
   else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
 
-  // Device icon
   let icon = '💻';
-  if (/iPhone/.test(ua))  icon = '📱';
-  else if (/iPad/.test(ua)) icon = '📱';
-  else if (/Android/.test(ua) && /Mobile/.test(ua)) icon = '📱';
-  else if (/Android/.test(ua)) icon = '📟';
-  else if (/Mac/.test(os)) icon = '🖥️';
+  if (/iPhone|Android.*Mobile/.test(ua)) icon = '📱';
+  else if (/iPad|Android/.test(ua))      icon = '📟';
+  else if (/Mac/.test(os))               icon = '🖥️';
 
-  return {
-    name: os,          // e.g. "Windows 11/10", "iPhone", "Mac"
-    browser,           // e.g. "Chrome", "Firefox"
-    icon,              // emoji icon
-    label: `${os} · ${browser}`,  // full label
-  };
+  return { name: os, browser, icon, label: `${os} · ${browser}` };
 }
 
 const MY_DEVICE = getDeviceInfo();
@@ -369,7 +370,7 @@ function goReceive() {
   if (code && /^\d{6}$/.test(code)) { document.getElementById('codeInput').value = code; connectToPeer(); }
 }
 
-function toast(msg, dur = 3000) {
+function toast(msg, dur = 3200) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
   clearTimeout(toast._t);
@@ -392,7 +393,7 @@ function formatSpeed(bps) {
 function formatEta(remainBytes, bps) {
   if (bps <= 0 || remainBytes <= 0) return '';
   const s = remainBytes / bps;
-  if (s < 60)  return `${Math.ceil(s)}s left`;
+  if (s < 60)   return `${Math.ceil(s)}s left`;
   if (s < 3600) return `${Math.ceil(s/60)}m left`;
   return `${(s/3600).toFixed(1)}h left`;
 }
@@ -418,9 +419,6 @@ function fileIcon(name) {
 
 function genCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
 
-// ══════════════════════════════════════════════════════
-//  FAST PEER FACTORY  — tries servers in order with timeout
-// ══════════════════════════════════════════════════════
 function createPeerWithFallback(peerId, onReady, onError) {
   let serverIdx = 0;
   let peer = null;
@@ -432,7 +430,6 @@ function createPeerWithFallback(peerId, onReady, onError) {
       onError(new Error('Could not connect to any signalling server'));
       return;
     }
-
     const srv = PEER_SERVERS[serverIdx++];
     const cfg = { ...BASE_PEER_CONFIG };
     if (srv) {
@@ -444,9 +441,8 @@ function createPeerWithFallback(peerId, onReady, onError) {
 
     peer = peerId ? new Peer(peerId, cfg) : new Peer(cfg);
 
-    // Timeout: if not open in 4s, try next server
     timeoutHandle = setTimeout(() => {
-      console.warn('[FileShare] Signalling server timeout, trying next…');
+      console.warn('[FileShare] Signalling timeout, trying next…');
       tryNext();
     }, 4000);
 
@@ -458,7 +454,6 @@ function createPeerWithFallback(peerId, onReady, onError) {
     peer.on('error', err => {
       clearTimeout(timeoutHandle);
       if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
-        console.warn('[FileShare] Server error, trying next…', err.type);
         tryNext();
       } else {
         onError(err);
@@ -467,6 +462,38 @@ function createPeerWithFallback(peerId, onReady, onError) {
   }
 
   tryNext();
+}
+
+// ══════════════════════════════════════════════════════
+//  ZIP PACKAGING ENGINE (Multiple Files / Folders)
+// ══════════════════════════════════════════════════════
+async function packageIntoZip(files, zipName, onProgress) {
+  if (typeof JSZip === 'undefined') {
+    throw new Error('ZIP library not loaded. Please check your internet connection.');
+  }
+  const zip = new JSZip();
+
+  for (const f of files) {
+    const relPath = (f.webkitRelativePath || f.name).replace(/^\/+/, '');
+    zip.file(relPath, f);
+  }
+
+  // Fast deflate compression (level 1) for rapid bundling
+  const blob = await zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 1 },
+    streamFiles: true,
+  }, (meta) => {
+    if (onProgress) onProgress(meta.percent);
+  });
+
+  const zipFile = new File([blob], zipName, {
+    type: 'application/zip',
+    lastModified: Date.now(),
+  });
+
+  return zipFile;
 }
 
 // ══════════════════════════════════════════════════════
@@ -479,6 +506,9 @@ async function onDrop(e) {
   e.preventDefault();
   document.getElementById('dropZone').classList.remove('drag-over');
   const files = [];
+  let containsFolder = false;
+  let topFolderName = '';
+
   const traverse = (entry, path = '') => new Promise(res => {
     if (entry.isFile) {
       entry.file(f => {
@@ -486,6 +516,8 @@ async function onDrop(e) {
         files.push(f); res();
       }, res);
     } else if (entry.isDirectory) {
+      containsFolder = true;
+      if (!topFolderName && !path) topFolderName = entry.name;
       const reader = entry.createReader();
       const read = () => reader.readEntries(async entries => {
         if (!entries.length) return res();
@@ -495,27 +527,107 @@ async function onDrop(e) {
       read();
     } else res();
   });
+
   await Promise.all(Array.from(e.dataTransfer.items).map(item => {
     const en = item.webkitGetAsEntry?.();
     return en ? traverse(en) : Promise.resolve();
   }));
-  if (files.length) onFilesSelected(files);
+
+  if (files.length) {
+    onFilesSelected(files, containsFolder, topFolderName);
+  }
 }
 
 // ══════════════════════════════════════════════════════
 //  SHARE SIDE
 // ══════════════════════════════════════════════════════
-let sharedFiles   = [];
-let sharePeer     = null;
-let shareConns    = [];
-let currentCode   = '';
-let connDevices   = {};  // peerId → { name, browser, icon }
+let sharedFiles     = [];
+let originalSource  = []; // Keep original file list in case user adds more
+let sharePeer       = null;
+let shareConns      = [];
+let currentCode     = '';
+let connDevices     = {};
 
-function onFilesSelected(list) {
+async function onFilesSelected(list, isFolder = false, explicitFolderName = '') {
   const files = Array.from(list);
   if (!files.length) return;
-  sharedFiles = files;
-  startSharing();
+
+  const hasRelativePath = files.some(f => f.webkitRelativePath && f.webkitRelativePath.includes('/'));
+  const isFolderImport  = isFolder || hasRelativePath;
+
+  // ─────────────────────────────────────────────────────────────
+  // 1 FILE RULE: If exactly 1 file and NOT a folder -> DO NOT CONVERT TO ZIP!
+  // ─────────────────────────────────────────────────────────────
+  if (files.length === 1 && !isFolderImport) {
+    const singleFile = files[0];
+    singleFile.isZippedBundle = false;
+    sharedFiles = [singleFile];
+    originalSource = files;
+    startSharing();
+    toast(`📄 1 file ready to share (direct, no zip)`);
+    return;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // MULTIPLE FILES OR FOLDER RULE: Convert to a SINGLE ZIP FILE!
+  // ─────────────────────────────────────────────────────────────
+  let zipName = 'Shared_Files.zip';
+  if (explicitFolderName) {
+    zipName = `${explicitFolderName.replace(/[\/\\]/g, '')}.zip`;
+  } else if (isFolderImport) {
+    const sample = files.find(f => f.webkitRelativePath && f.webkitRelativePath.includes('/'));
+    if (sample) {
+      const top = sample.webkitRelativePath.split('/')[0].trim();
+      if (top) zipName = `${top}.zip`;
+    } else {
+      zipName = 'Folder_Archive.zip';
+    }
+  } else {
+    zipName = 'Shared_Files.zip';
+  }
+
+  // Show packaging UI
+  document.getElementById('share-step1').style.display = 'none';
+  document.getElementById('share-step2').style.display = 'none';
+  document.getElementById('share-packaging').style.display = 'block';
+  document.getElementById('packTitle').textContent = `Packaging into ${zipName}…`;
+  document.getElementById('packSub').textContent = `Converting ${files.length} files into a single ZIP for high-speed transfer`;
+  document.getElementById('packFill').style.width = '0%';
+  document.getElementById('packPercent').textContent = '0%';
+
+  try {
+    const zipFile = await packageIntoZip(files, zipName, (percent) => {
+      const p = Math.round(percent);
+      document.getElementById('packFill').style.width = `${p}%`;
+      document.getElementById('packPercent').textContent = `${p}%`;
+    });
+
+    zipFile.isZippedBundle   = true;
+    zipFile.originalCount    = files.length;
+    zipFile.folderLabel      = isFolderImport ? zipName.replace(/\.zip$/i, '') : `${files.length} files`;
+
+    sharedFiles = [zipFile];
+    originalSource = files;
+
+    document.getElementById('share-packaging').style.display = 'none';
+    startSharing();
+    toast(`🗜️ Converted ${files.length} files into single ${zipName}`);
+  } catch (err) {
+    console.error('ZIP packaging failed:', err);
+    document.getElementById('share-packaging').style.display = 'none';
+    document.getElementById('share-step1').style.display = 'block';
+    toast(`❌ Failed to create ZIP: ${err.message}`);
+  }
+}
+
+async function onMoreFilesAdded(list, isFolder = false) {
+  const newFiles = Array.from(list);
+  if (!newFiles.length) return;
+  // Combine with original files and package into single ZIP
+  const combined = [...originalSource, ...newFiles];
+  stopSharing();
+  await onFilesSelected(combined, isFolder);
+  document.getElementById('addMoreInput').value = '';
 }
 
 function startSharing() {
@@ -541,12 +653,10 @@ function startSharing() {
 
         conn.on('open', () => {
           setShareStatus('green', `${shareConns.length} receiver(s) connected`);
-          // Send manifest with our device info
           sendManifest(conn);
         });
 
         conn.on('data', async data => {
-          // Receiver announces itself
           if (data.type === 'hello') {
             connDevices[conn.peer] = { name: data.name, browser: data.browser, icon: data.icon };
             updateConnectedDevices();
@@ -597,14 +707,17 @@ function sendManifest(conn) {
   conn.send({
     type: 'manifest',
     label: getSourceLabel(),
-    // Send sender device info so receiver can display it
     senderName:    MY_DEVICE.name,
     senderBrowser: MY_DEVICE.browser,
     senderIcon:    MY_DEVICE.icon,
     files: sharedFiles.map((f, i) => ({
-      index: i, name: f.name, size: f.size,
+      index: i,
+      name: f.name,
+      size: f.size,
       type: f.type || 'application/octet-stream',
       path: f.webkitRelativePath || f.name,
+      isZip: f.isZippedBundle || f.name.toLowerCase().endsWith('.zip'),
+      originalCount: f.originalCount || null,
     }))
   });
 }
@@ -620,13 +733,11 @@ async function sendFile(conn, idx) {
   let offset = 0;
 
   while (offset < file.size) {
-    // ── Buffer flow control: pause if pipe is full ──
     if (dc && dc.bufferedAmount > HIGH_WATER) {
       await waitForDrain(dc);
     }
-
-    const end  = Math.min(offset + CHUNK_SIZE, file.size);
-    const buf  = await file.slice(offset, end).arrayBuffer();
+    const end = Math.min(offset + CHUNK_SIZE, file.size);
+    const buf = await file.slice(offset, end).arrayBuffer();
     conn.send({ type: 'chunk', index: idx, data: buf, offset });
     offset += buf.byteLength;
   }
@@ -646,17 +757,23 @@ function waitForDrain(dc) {
 
 function getSourceLabel() {
   if (!sharedFiles.length) return '—';
-  const first = sharedFiles[0].webkitRelativePath || '';
-  if (first.includes('/')) return '📁 ' + first.split('/')[0];
-  if (sharedFiles.length === 1) return '📄 ' + sharedFiles[0].name;
-  return `📦 ${sharedFiles.length} files`;
+  const f = sharedFiles[0];
+  if (f.isZippedBundle) {
+    return `🗜️ ${f.name} (${f.originalCount} files)`;
+  }
+  return '📄 ' + f.name;
 }
 
 function updateShareUI() {
   document.getElementById('shareSourceLabel').textContent = getSourceLabel();
-  document.getElementById('fileCountTag').textContent = sharedFiles.length + ' file' + (sharedFiles.length !== 1 ? 's' : '');
+  const f = sharedFiles[0];
+  if (f && f.isZippedBundle) {
+    document.getElementById('fileCountTag').textContent = `Single ZIP Archive (${f.originalCount} files)`;
+  } else {
+    document.getElementById('fileCountTag').textContent = '1 File (Direct)';
+  }
   document.getElementById('totalSizeTag').textContent = formatBytes(sharedFiles.reduce((s, f) => s + f.size, 0));
-  document.getElementById('shareListLabel').textContent = `FILES (${sharedFiles.length})`;
+  document.getElementById('shareListLabel').textContent = `READY TO SHARE`;
   renderShareFileList();
 }
 
@@ -675,10 +792,10 @@ function renderShareFileList() {
     <div class="file-item">
       <div class="fi-row">
         <div class="fi-left">
-          <span class="fi-icon">${fileIcon(f.name)}</span>
+          <span class="fi-icon">${f.isZippedBundle ? '🗜️' : fileIcon(f.name)}</span>
           <div class="fi-info">
             <div class="fi-name">${escHtml(f.name)}</div>
-            <div class="fi-meta">${escHtml(f.webkitRelativePath || f.type || 'file')}</div>
+            <div class="fi-meta">${f.isZippedBundle ? `Single ZIP Archive · Contains ${f.originalCount} files` : escHtml(f.type || 'Direct file')}</div>
           </div>
         </div>
         <div class="fi-right">
@@ -691,27 +808,20 @@ function renderShareFileList() {
 
 function removeFile(idx) {
   sharedFiles.splice(idx, 1);
-  if (!sharedFiles.length) { stopSharing(); return; }
-  updateShareUI();
-  shareConns.forEach(c => sendManifest(c));
-}
-
-function onMoreFilesAdded(list) {
-  const newFiles = Array.from(list);
-  sharedFiles = [...sharedFiles, ...newFiles];
-  updateShareUI();
-  shareConns.forEach(c => sendManifest(c));
-  toast(`➕ Added ${newFiles.length} more file(s)`);
-  document.getElementById('addMoreInput').value = '';
+  originalSource = [];
+  stopSharing();
 }
 
 function stopSharing() {
   if (sharePeer) { try { sharePeer.destroy(); } catch(_) {} sharePeer = null; }
-  shareConns = []; sharedFiles = []; currentCode = ''; connDevices = {};
+  shareConns = []; sharedFiles = []; originalSource = []; currentCode = ''; connDevices = {};
+  document.getElementById('share-packaging').style.display = 'none';
   document.getElementById('share-step1').style.display = 'block';
   document.getElementById('share-step2').style.display = 'none';
   document.getElementById('connectedDevices').style.display = 'none';
-  ['fileInput','folderInput'].forEach(id => { try { document.getElementById(id).value = ''; } catch(_) {} });
+  ['fileInput','folderInput','addMoreInput'].forEach(id => {
+    try { document.getElementById(id).value = ''; } catch(_) {}
+  });
 }
 
 function copyCode() { navigator.clipboard.writeText(currentCode).then(() => toast('✅ Code copied!')); }
@@ -723,10 +833,10 @@ function copyLink() {
 // ══════════════════════════════════════════════════════
 //  RECEIVE SIDE
 // ══════════════════════════════════════════════════════
-let recvPeer    = null;
-let recvConn    = null;
-let recvFiles   = [];
-let recvBufs    = {};   // index → { chunks, total, received, startTime, lastTime, lastBytes }
+let recvPeer  = null;
+let recvConn  = null;
+let recvFiles = [];
+let recvBufs  = {};
 
 function connectToPeer() {
   const code = document.getElementById('codeInput').value.trim();
@@ -737,7 +847,7 @@ function connectToPeer() {
   if (recvPeer) { try { recvPeer.destroy(); } catch(_) {} recvPeer = null; }
 
   createPeerWithFallback(
-    null,  // auto-assign ID for receiver
+    null,
     (peer) => {
       recvPeer = peer;
       setRecvStatus('<span class="connecting-anim"></span>Reaching sender…');
@@ -748,8 +858,7 @@ function connectToPeer() {
       });
 
       recvConn.on('open', () => {
-        setRecvStatus('✅ Connected! Loading file list…');
-        // Announce our device to the sender
+        setRecvStatus('✅ Connected! Ready to download…');
         recvConn.send({
           type:    'hello',
           name:    MY_DEVICE.name,
@@ -787,17 +896,25 @@ function connectToPeer() {
 
 function onManifest(data) {
   recvFiles = data.files;
-  document.getElementById('recvSourceLabel').textContent = data.label || '📁 Shared Files';
-  document.getElementById('recvFileCountLabel').textContent = `FILES AVAILABLE (${recvFiles.length})`;
+  document.getElementById('recvSourceLabel').textContent = data.label || '📁 Shared File';
+  document.getElementById('recvFileCountLabel').textContent = recvFiles.length === 1 ? 'FILE AVAILABLE' : `FILES AVAILABLE (${recvFiles.length})`;
   document.getElementById('recv-step1').style.display = 'none';
   document.getElementById('recv-step2').style.display = 'block';
 
-  // Show sender device card
+  // Sender device card
   if (data.senderName) {
     document.getElementById('senderDeviceIcon').textContent = data.senderIcon || '💻';
     document.getElementById('senderDeviceName').textContent = data.senderName;
-    document.getElementById('senderDeviceSub').textContent  = `${data.senderBrowser || 'Browser'} · Sharing ${recvFiles.length} file${recvFiles.length !== 1 ? 's' : ''}`;
+    document.getElementById('senderDeviceSub').textContent  = `${data.senderBrowser || 'Browser'} · Connected`;
     document.getElementById('senderDeviceCard').style.display = 'flex';
+  }
+
+  // Set download button text
+  const mainBtn = document.getElementById('recvDownloadMainBtn');
+  if (recvFiles.length === 1) {
+    mainBtn.textContent = recvFiles[0].isZip ? '⬇ Download ZIP' : '⬇ Download File';
+  } else {
+    mainBtn.textContent = '⬇ Download All';
   }
 
   renderRecvFileList(recvFiles);
@@ -822,7 +939,6 @@ function onChunk(data) {
   b.chunks.push(data.data);
   b.received += data.data.byteLength;
 
-  // Speed calculation (rolling)
   const now = Date.now();
   const elapsed = now - b.lastTime;
   if (elapsed >= SPEED_WINDOW) {
@@ -876,10 +992,10 @@ function renderRecvFileList(files) {
     <div class="file-item" id="rfi-${i}">
       <div class="fi-row">
         <div class="fi-left">
-          <span class="fi-icon">${fileIcon(f.name)}</span>
+          <span class="fi-icon">${f.isZip ? '🗜️' : fileIcon(f.name)}</span>
           <div class="fi-info">
             <div class="fi-name">${escHtml(f.name)}</div>
-            <div class="fi-meta">${f.path !== f.name ? escHtml(f.path) + ' · ' : ''}${escHtml(f.type || 'file')}</div>
+            <div class="fi-meta">${f.isZip && f.originalCount ? `Single ZIP Archive · Contains ${f.originalCount} files` : escHtml(f.type || 'File')}</div>
           </div>
         </div>
         <div class="fi-right">
@@ -907,12 +1023,16 @@ function downloadFile(idx) {
 
 function downloadAll() {
   if (!recvConn?.open) { toast('⚠️ Not connected to sender'); return; }
+  if (recvFiles.length === 1) {
+    downloadFile(0);
+    return;
+  }
   recvFiles.forEach((_, i) => {
     const btn = document.getElementById('dl-btn-' + i);
     if (btn) { btn.disabled = true; btn.textContent = '⏳ …'; }
   });
   recvConn.send({ type: 'request_all' });
-  toast('⬇ Downloading all files…');
+  toast('⬇ Downloading files…');
 }
 
 function triggerDownload(blob, name) {
@@ -938,7 +1058,6 @@ function disconnectRecv() {
   setRecvStatus('');
 }
 
-// ── XSS guard ──
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
