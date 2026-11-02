@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FolderShare – Instant Secure Sharing</title>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d2e;
+      --card: #21253a;
+      --border: #2e3250;
+      --accent: #6c63ff;
+      --accent2: #ff6584;
+      --green: #00d4aa;
+      --text: #e8eaf6;
+      --muted: #8b90b5;
+      --radius: 16px;
+      --shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    /* ── NAV ── */
+    nav {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .logo { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+    .badge {
+      font-size: 0.7rem; background: var(--accent);
+      color: #fff; padding: 3px 8px; border-radius: 20px;
+      margin-left: 8px; vertical-align: middle;
+    }
+    /* ── PAGES ── */
+    .page { display: none; width: 100%; max-width: 700px; padding: 40px 20px; }
+    .page.active { display: flex; flex-direction: column; gap: 24px; }
+    /* ── HOME ── */
+    .hero { text-align: center; margin-bottom: 8px; }
+    .hero h1 { font-size: 2.4rem; font-weight: 800; line-height: 1.2; }
+    .hero h1 em { color: var(--accent); font-style: normal; }
+    .hero p { color: var(--muted); margin-top: 10px; font-size: 1rem; }
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media(max-width:500px){ .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 22px;
+      cursor: pointer;
+      transition: transform .15s, border-color .15s, box-shadow .15s;
+      user-select: none;
+    }
+    .card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow); }
+    .card .icon { font-size: 2.2rem; margin-bottom: 14px; }
+    .card h2 { font-size: 1.1rem; font-weight: 700; }
+    .card p { color: var(--muted); font-size: 0.85rem; margin-top: 6px; line-height: 1.5; }
+    /* ── SECTION CARD ── */
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+    }
+    .section h2 { font-size: 1.15rem; font-weight: 700; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px; border-radius: 10px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      border: none; transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: 0.88; }
+    .btn-green  { background: var(--green); color: #0f1117; }
+    .btn-green:hover:not(:disabled) { opacity: 0.88; }
+    .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: var(--accent2); color: #fff; }
+    .btn-sm { padding: 7px 14px; font-size: 0.82rem; }
+    /* ── CODE DISPLAY ── */
+    .code-box {
+      background: var(--bg);
+      border: 2px dashed var(--accent);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+    .code-digits {
+      font-size: 3rem; font-weight: 800; letter-spacing: 12px;
+      color: var(--accent); font-family: monospace;
+      user-select: all;
+    }
+    .code-label { color: var(--muted); font-size: 0.82rem; margin-top: 8px; }
+    /* ── CODE INPUT ── */
+    .code-input-row { display: flex; gap: 10px; }
+    .code-input-row input {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); border-radius: 10px; padding: 12px 16px;
+      font-size: 1.5rem; font-weight: 700; letter-spacing: 10px;
+      text-align: center; font-family: monospace;
+      outline: none; transition: border-color .15s;
+    }
+    .code-input-row input:focus { border-color: var(--accent); }
+    /* ── FILE LIST ── */
+    .file-list { display: flex; flex-direction: column; gap: 8px; }
+    .file-item {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 16px; gap: 10px;
+    }
+    .file-item .fi-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .file-item .fi-icon { font-size: 1.3rem; flex-shrink: 0; }
+    .file-item .fi-name { font-size: 0.9rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-item .fi-size { font-size: 0.75rem; color: var(--muted); }
+    .file-item .fi-path { font-size: 0.72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* ── STATUS DOTS ── */
+    .status-dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; margin-right: 6px;
+    }
+    .dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot-yellow { background: #ffd700; box-shadow: 0 0 6px #ffd700; }
+    .dot-red { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+    /* ── PROGRESS ── */
+    .progress-bar { background: var(--border); border-radius: 99px; height: 6px; overflow: hidden; margin-top: 8px; }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width .2s; }
+    /* ── INFO / ALERT ── */
+    .info-box {
+      background: rgba(108,99,255,0.1); border: 1px solid rgba(108,99,255,0.3);
+      border-radius: 10px; padding: 14px 16px; font-size: 0.85rem; color: var(--muted); line-height: 1.6;
+    }
+    .info-box strong { color: var(--text); }
+    .warn-box {
+      background: rgba(255,101,132,0.1); border: 1px solid rgba(255,101,132,0.3);
+      border-radius: 10px; padding: 14px 16px; font-size: 0.85rem; color: #ffb3c1; line-height: 1.6;
+    }
+    /* ── MISC ── */
+    label.upload-label {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--bg); border: 2px dashed var(--border);
+      border-radius: 12px; padding: 28px; cursor: pointer;
+      transition: border-color .2s, background .2s; text-align: center;
+      flex-direction: column; justify-content: center;
+    }
+    label.upload-label:hover { border-color: var(--accent); background: rgba(108,99,255,0.05); }
+    label.upload-label .ul-icon { font-size: 2.5rem; }
+    label.upload-label .ul-text { font-weight: 600; }
+    label.upload-label .ul-sub { font-size: 0.82rem; color: var(--muted); }
+    input[type=file] { display: none; }
+    .divider { border: none; border-top: 1px solid var(--border); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .tag {
+      font-size: 0.75rem; background: rgba(108,99,255,0.15);
+      color: var(--accent); border-radius: 6px; padding: 3px 8px;
+    }
+    /* ── FOLDER PATH ── */
+    .folder-name {
+      font-size: 0.85rem; color: var(--green); background: rgba(0,212,170,0.1);
+      border-radius: 8px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .peer-count {
+      font-size: 0.8rem; color: var(--muted);
+    }
+    /* ── DOWNLOAD PROGRESS ── */
+    .dl-progress { margin-top: 6px; }
+    /* toast */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 20px;
+      font-size: 0.9rem; box-shadow: var(--shadow);
+      opacity: 0; transform: translateY(10px);
+      transition: opacity .3s, transform .3s;
+      z-index: 999; pointer-events: none;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    /* back btn */
+    .back-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; padding: 0; }
+    .back-btn:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">📂 Folder<span>Share</span> <span class="badge">P2P</span></div>
+  <div style="font-size:0.78rem;color:var(--muted)">No server • Files never leave your device</div>
+</nav>
+
+<!-- ═══════════ HOME PAGE ═══════════ -->
+<div class="page active" id="page-home">
+  <div class="hero">
+    <h1>Share any folder<br>with a <em>6-digit code</em></h1>
+    <p>Peer-to-peer • No uploads • No account • Works anywhere</p>
+  </div>
+  <div class="cards">
+    <div class="card" onclick="goShare()">
+      <div class="icon">📤</div>
+      <h2>Share a Folder</h2>
+      <p>Select a folder from your device, get a 6-digit code, and share it with anyone.</p>
+    </div>
+    <div class="card" onclick="goReceive()">
+      <div class="icon">📥</div>
+      <h2>Access Shared Folder</h2>
+      <p>Enter the 6-digit code given by the sender to browse and download files.</p>
+    </div>
+  </div>
+  <div class="info-box">
+    🔒 <strong>How it works:</strong> Files transfer directly between devices using WebRTC (peer-to-peer).
+    Nothing is uploaded to any server. The 6-digit code changes every session for security.
+  </div>
+</div>
+
+<!-- ═══════════ SHARE PAGE ═══════════ -->
+<div class="page" id="page-share">
+  <button class="back-btn" onclick="goHome()">← Back</button>
+  <div class="section">
+    <h2>📤 Share a Folder</h2>
+
+    <!-- Step 1: Pick folder -->
+    <div id="share-step1">
+      <label class="upload-label" for="folderInput">
+        <span class="ul-icon">📁</span>
+        <span class="ul-text">Click to select a folder</span>
+        <span class="ul-sub">All files inside will be shareable</span>
+      </label>
+      <input type="file" id="folderInput" webkitdirectory multiple onchange="onFolderSelected(this)" />
+    </div>
+
+    <!-- Step 2: Show code + file list -->
+    <div id="share-step2" style="display:none; margin-top:18px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+        <span class="folder-name" id="folderNameDisplay">📁 —</span>
+        <span id="fileCountTag" class="tag"></span>
+        <span id="peerCountDisplay" class="peer-count"></span>
+      </div>
+
+      <div class="code-box">
+        <div class="code-digits" id="shareCode">——</div>
+        <div class="code-label">Share this 6-digit code with the receiver</div>
+        <div style="margin-top:12px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="copyCode()">📋 Copy Code</button>
+          <button class="btn btn-outline btn-sm" onclick="copyLink()">🔗 Copy Link</button>
+        </div>
+      </div>
+
+      <div id="share-status" style="margin-top:14px; font-size:0.88rem; color:var(--muted);">
+        <span class="status-dot dot-yellow" id="statusDot"></span>
+        <span id="statusText">Waiting for connection…</span>
+      </div>
+
+      <hr class="divider" style="margin:18px 0;" />
+
+      <div style="font-size:0.9rem; font-weight:600; margin-bottom:10px; color:var(--muted);">FILES BEING SHARED</div>
+      <div class="file-list" id="shareFileList"></div>
+
+      <div style="margin-top:18px;">
+        <button class="btn btn-danger btn-sm" onclick="stopSharing()">⛔ Stop Sharing</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ RECEIVE PAGE ═══════════ -->
+<div class="page" id="page-receive">
+  <button class="back-btn" onclick="goHome()">← Back</button>
+  <div class="section">
+    <h2>📥 Access Shared Folder</h2>
+
+    <div id="recv-step1">
+      <p style="color:var(--muted); font-size:0.9rem; margin-bottom:16px;">Enter the 6-digit code from the sender:</p>
+      <div class="code-input-row">
+        <input type="text" id="codeInput" maxlength="6" placeholder="000000"
+               oninput="this.value=this.value.replace(/\D/g,'')"
+               onkeydown="if(event.key==='Enter') connectToPeer()" />
+        <button class="btn btn-green" id="connectBtn" onclick="connectToPeer()">Connect</button>
+      </div>
+      <div id="recv-connect-status" style="margin-top:12px; font-size:0.85rem; color:var(--muted);"></div>
+    </div>
+
+    <div id="recv-step2" style="display:none; margin-top:18px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+        <div>
+          <div class="folder-name" id="recvFolderName">📁 Shared Folder</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="disconnectRecv()">✖ Disconnect</button>
+      </div>
+      <div style="margin-bottom:10px; font-size:0.9rem; font-weight:600; color:var(--muted);">FILES AVAILABLE</div>
+      <div class="file-list" id="recvFileList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  UTILITIES
+// ══════════════════════════════════════════
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goHome()    { stopSharing(); disconnectRecv(); showPage('page-home'); }
+function goShare()   { showPage('page-share'); }
+function goReceive() {
+  // check if URL has ?code=
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if (code && /^\d{6}$/.test(code)) {
+    showPage('page-receive');
+    document.getElementById('codeInput').value = code;
+    connectToPeer();
+  } else {
+    showPage('page-receive');
+  }
+}
+
+function toast(msg, dur = 2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024, sizes = ['B','KB','MB','GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+function fileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const map = {
+    pdf:'📄', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', ppt:'📊', pptx:'📊',
+    jpg:'🖼️', jpeg:'🖼️', png:'🖼️', gif:'🖼️', svg:'🖼️', webp:'🖼️', bmp:'🖼️',
+    mp4:'🎬', mkv:'🎬', avi:'🎬', mov:'🎬', mp3:'🎵', wav:'🎵', flac:'🎵',
+    zip:'🗜️', rar:'🗜️', '7z':'🗜️', tar:'🗜️', gz:'🗜️',
+    js:'💻', ts:'💻', py:'💻', html:'💻', css:'💻', json:'💻', java:'💻',
+    c:'💻', cpp:'💻', cs:'💻', go:'💻', rs:'💻', php:'💻',
+    txt:'📃', md:'📃', csv:'📃', xml:'📃', log:'📃',
+    exe:'⚙️', msi:'⚙️', dmg:'⚙️', apk:'📱',
+  };
+  return map[ext] || '📎';
+}
+
+// Generate 6-digit code
+function genCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+// ══════════════════════════════════════════
+//  SHARE SIDE
+// ══════════════════════════════════════════
+let sharedFiles = [];   // Array of File objects
+let sharePeer   = null;
+let shareConnections = [];
+let currentCode = '';
+
+function onFolderSelected(input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  sharedFiles = files;
+  startSharing(files);
+}
+
+function startSharing(files) {
+  currentCode = genCode();
+  const peerId = 'fshare-' + currentCode;
+
+  document.getElementById('share-step1').style.display = 'none';
+  document.getElementById('share-step2').style.display = 'block';
+  document.getElementById('shareCode').textContent = currentCode;
+
+  // Folder name from first file's path
+  const firstPath = files[0].webkitRelativePath || files[0].name;
+  const folderName = firstPath.split('/')[0] || 'Selected Files';
+  document.getElementById('folderNameDisplay').textContent = '📁 ' + folderName;
+  document.getElementById('fileCountTag').textContent = files.length + ' file' + (files.length !== 1 ? 's' : '');
+
+  renderShareFileList(files);
+  setShareStatus('yellow', 'Waiting for connection…');
+
+  if (sharePeer) { sharePeer.destroy(); }
+
+  sharePeer = new Peer(peerId, { debug: 0 });
+
+  sharePeer.on('open', id => {
+    console.log('Share peer open:', id);
+    setShareStatus('yellow', 'Ready — share the code above');
+  });
+
+  sharePeer.on('connection', conn => {
+    shareConnections.push(conn);
+    updatePeerCount();
+    setShareStatus('green', 'Connected! Sending file list…');
+
+    conn.on('open', () => {
+      // Send file manifest
+      const manifest = files.map((f, i) => ({
+        index: i,
+        name: f.name,
+        size: f.size,
+        type: f.type,
+        path: f.webkitRelativePath || f.name,
+      }));
+      conn.send({ type: 'manifest', files: manifest, folder: document.getElementById('folderNameDisplay').textContent });
+    });
+
+    conn.on('data', async data => {
+      if (data.type === 'request') {
+        const idx = data.index;
+        const file = files[idx];
+        if (!file) return;
+
+        const CHUNK = 64 * 1024; // 64 KB chunks
+        const total = file.size;
+        let offset = 0;
+
+        conn.send({ type: 'start', index: idx, total });
+
+        const reader = new FileReader();
+        const readChunk = () => {
+          const slice = file.slice(offset, offset + CHUNK);
+          reader.readAsArrayBuffer(slice);
+        };
+
+        reader.onload = e => {
+          conn.send({ type: 'chunk', index: idx, data: e.target.result, offset });
+          offset += e.target.result.byteLength;
+          if (offset < total) {
+            readChunk();
+          } else {
+            conn.send({ type: 'done', index: idx });
+          }
+        };
+        readChunk();
+      }
+    });
+
+    conn.on('close', () => {
+      shareConnections = shareConnections.filter(c => c !== conn);
+      updatePeerCount();
+      if (shareConnections.length === 0) setShareStatus('yellow', 'Disconnected — waiting for new connection…');
+    });
+
+    conn.on('error', err => console.error('Conn error', err));
+  });
+
+  sharePeer.on('error', err => {
+    if (err.type === 'unavailable-id') {
+      toast('⚠️ Code conflict — generating new code…');
+      setTimeout(() => startSharing(files), 300);
+    } else {
+      setShareStatus('red', 'Error: ' + err.message);
+    }
+  });
+}
+
+function updatePeerCount() {
+  const n = shareConnections.length;
+  document.getElementById('peerCountDisplay').textContent = n > 0 ? `👥 ${n} connected` : '';
+}
+
+function setShareStatus(color, msg) {
+  document.getElementById('statusDot').className = 'status-dot dot-' + color;
+  document.getElementById('statusText').textContent = msg;
+}
+
+function renderShareFileList(files) {
+  const list = document.getElementById('shareFileList');
+  list.innerHTML = files.map((f, i) => `
+    <div class="file-item">
+      <div class="fi-left" style="flex-direction:column; align-items:flex-start;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="fi-icon">${fileIcon(f.name)}</span>
+          <span class="fi-name">${f.name}</span>
+        </div>
+        <span class="fi-path">${f.webkitRelativePath || f.name}</span>
+      </div>
+      <span class="fi-size">${formatBytes(f.size)}</span>
+    </div>
+  `).join('');
+}
+
+function stopSharing() {
+  if (sharePeer) { sharePeer.destroy(); sharePeer = null; }
+  shareConnections = [];
+  sharedFiles = [];
+  currentCode = '';
+  document.getElementById('share-step1').style.display = 'block';
+  document.getElementById('share-step2').style.display = 'none';
+  document.getElementById('folderInput').value = '';
+}
+
+function copyCode() {
+  navigator.clipboard.writeText(currentCode).then(() => toast('✅ Code copied!'));
+}
+
+function copyLink() {
+  const url = location.origin + location.pathname + '?code=' + currentCode;
+  navigator.clipboard.writeText(url).then(() => toast('🔗 Link copied! Send this to the receiver.'));
+}
+
+// ══════════════════════════════════════════
+//  RECEIVE SIDE
+// ══════════════════════════════════════════
+let recvPeer = null;
+let recvConn = null;
+let recvFiles = [];  // manifest
+let recvBuffers = {}; // index -> chunks
+
+function connectToPeer() {
+  const code = document.getElementById('codeInput').value.trim();
+  if (!/^\d{6}$/.test(code)) { toast('⚠️ Enter a valid 6-digit code'); return; }
+
+  const btn = document.getElementById('connectBtn');
+  btn.disabled = true;
+  setRecvStatus('🔄 Connecting…');
+
+  if (recvPeer) { recvPeer.destroy(); recvPeer = null; }
+
+  // Use a random peer ID for receiver
+  recvPeer = new Peer('fshare-recv-' + Date.now() + '-' + Math.random().toString(36).slice(2,6), { debug: 0 });
+
+  recvPeer.on('open', myId => {
+    setRecvStatus('🔄 Reaching sender…');
+    recvConn = recvPeer.connect('fshare-' + code, { reliable: true });
+
+    recvConn.on('open', () => {
+      setRecvStatus('✅ Connected!');
+    });
+
+    recvConn.on('data', data => {
+      if (data.type === 'manifest') {
+        recvFiles = data.files;
+        document.getElementById('recvFolderName').textContent = data.folder || '📁 Shared Folder';
+        document.getElementById('recv-step1').style.display = 'none';
+        document.getElementById('recv-step2').style.display = 'block';
+        renderRecvFileList(data.files);
+      }
+      else if (data.type === 'start') {
+        recvBuffers[data.index] = { chunks: [], total: data.total, received: 0 };
+        updateDownloadProgress(data.index, 0, data.total);
+      }
+      else if (data.type === 'chunk') {
+        const buf = recvBuffers[data.index];
+        if (!buf) return;
+        buf.chunks.push(data.data);
+        buf.received += data.data.byteLength;
+        updateDownloadProgress(data.index, buf.received, buf.total);
+      }
+      else if (data.type === 'done') {
+        const buf = recvBuffers[data.index];
+        if (!buf) return;
+        const blob = new Blob(buf.chunks, { type: recvFiles[data.index].type || 'application/octet-stream' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = recvFiles[data.index].name; a.click();
+        URL.revokeObjectURL(url);
+        delete recvBuffers[data.index];
+        resetDownloadProgress(data.index);
+        toast('✅ Download complete: ' + recvFiles[data.index].name);
+      }
+    });
+
+    recvConn.on('close', () => {
+      toast('🔌 Sender disconnected');
+      document.getElementById('recv-step1').style.display = 'block';
+      document.getElementById('recv-step2').style.display = 'none';
+      btn.disabled = false;
+    });
+
+    recvConn.on('error', err => {
+      setRecvStatus('❌ Error: ' + err.message);
+      btn.disabled = false;
+    });
+  });
+
+  recvPeer.on('error', err => {
+    if (err.type === 'peer-unavailable') {
+      setRecvStatus('❌ Sender not found. Is the code correct and is the sender online?');
+    } else {
+      setRecvStatus('❌ ' + err.message);
+    }
+    btn.disabled = false;
+  });
+}
+
+function renderRecvFileList(files) {
+  const list = document.getElementById('recvFileList');
+  list.innerHTML = files.map((f, i) => `
+    <div class="file-item" id="recv-file-${i}">
+      <div class="fi-left" style="flex-direction:column; align-items:flex-start; flex:1; min-width:0;">
+        <div style="display:flex; align-items:center; gap:8px; width:100%;">
+          <span class="fi-icon">${fileIcon(f.name)}</span>
+          <div style="min-width:0;">
+            <div class="fi-name">${f.name}</div>
+            <div class="fi-path">${f.path}</div>
+          </div>
+        </div>
+        <div class="dl-progress" id="prog-${i}" style="display:none; width:100%;">
+          <div style="font-size:0.75rem; color:var(--accent); margin-bottom:3px;" id="prog-label-${i}">Downloading…</div>
+          <div class="progress-bar"><div class="progress-fill" id="prog-fill-${i}" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+        <span class="fi-size">${formatBytes(f.size)}</span>
+        <button class="btn btn-green btn-sm" id="dl-btn-${i}" onclick="downloadFile(${i})">⬇ Download</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function downloadFile(index) {
+  if (!recvConn || !recvConn.open) { toast('⚠️ Not connected to sender'); return; }
+  document.getElementById('dl-btn-' + index).disabled = true;
+  document.getElementById('dl-btn-' + index).textContent = '⏳ …';
+  recvConn.send({ type: 'request', index });
+}
+
+function updateDownloadProgress(index, received, total) {
+  const prog = document.getElementById('prog-' + index);
+  if (prog) {
+    prog.style.display = 'block';
+    const pct = total ? Math.round(received / total * 100) : 0;
+    document.getElementById('prog-fill-' + index).style.width = pct + '%';
+    document.getElementById('prog-label-' + index).textContent = `Downloading… ${pct}%`;
+  }
+}
+
+function resetDownloadProgress(index) {
+  const prog = document.getElementById('prog-' + index);
+  if (prog) prog.style.display = 'none';
+  const btn = document.getElementById('dl-btn-' + index);
+  if (btn) { btn.disabled = false; btn.textContent = '⬇ Download'; }
+}
+
+function setRecvStatus(msg) {
+  document.getElementById('recv-connect-status').textContent = msg;
+}
+
+function disconnectRecv() {
+  if (recvConn) { recvConn.close(); recvConn = null; }
+  if (recvPeer) { recvPeer.destroy(); recvPeer = null; }
+  recvFiles = [];
+  recvBuffers = {};
+  document.getElementById('recv-step1').style.display = 'block';
+  document.getElementById('recv-step2').style.display = 'none';
+  document.getElementById('connectBtn').disabled = false;
+  document.getElementById('codeInput').value = '';
+  setRecvStatus('');
+}
+
+// ── Auto-detect ?code= in URL on page load ──
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  if (code && /^\d{6}$/.test(code)) {
+    goReceive();
+  }
+});
+</script>
+</body>
+</html>
