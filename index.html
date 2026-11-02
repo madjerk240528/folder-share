@@ -7,6 +7,7 @@
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     :root {
       --bg: #0f1117; --surface: #1a1d2e; --card: #21253a; --border: #2e3250;
@@ -71,9 +72,13 @@
     .code-label { color: var(--muted); font-size: 0.82rem; margin-top: 8px; }
 
     /* Code input */
-    .code-input-row { display: flex; gap: 10px; }
-    .code-input-row input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 12px 16px; font-size: 1.5rem; font-weight: 700; letter-spacing: 10px; text-align: center; font-family: monospace; outline: none; transition: border-color .15s; }
+    .code-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .code-input-row input { flex: 1; min-width: 140px; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 10px; padding: 12px 14px; font-size: 1.5rem; font-weight: 700; letter-spacing: 10px; text-align: center; font-family: monospace; outline: none; transition: border-color .15s; }
     .code-input-row input:focus { border-color: var(--accent); }
+
+    /* Scanner Box */
+    #scannerBox { background: var(--bg); border: 2px dashed var(--accent); border-radius: 14px; padding: 16px; text-align: center; }
+    #qrReader video { border-radius: 10px; width: 100% !important; height: auto !important; }
 
     /* Device name card on receiver */
     .device-card { display: flex; align-items: center; gap: 12px; background: rgba(0,212,170,0.08); border: 1px solid rgba(0,212,170,0.3); border-radius: 12px; padding: 14px 18px; margin-bottom: 4px; }
@@ -136,40 +141,41 @@
 <body>
 
 <nav>
-  <div class="logo">⚡ File<span>Share</span> <span class="badge">P2P</span><span class="speed-badge">29s Keep-Awake</span></div>
+  <div class="logo">⚡ File<span>Share</span> <span class="badge">P2P</span><span class="speed-badge">QR Scanner</span></div>
   <div style="font-size:0.78rem;color:var(--muted)">1 File Direct • Folders to Single ZIP • Screen Stays ON</div>
 </nav>
 
 <!-- ══════════════ HOME ══════════════ -->
 <div class="page active" id="page-home">
   <div class="hero">
-    <h1>Share <em>anything</em> with<br>a 6-digit code</h1>
+    <h1>Share <em>anything</em> with<br>a 6-digit code or QR</h1>
     <p>Single files share as-is. Multiple files or folders auto-pack into 1 ZIP. High-speed peer-to-peer.</p>
     <div class="format-tags">
-      <span class="format-tag">📄 1-File Direct (No ZIP)</span><span class="format-tag">🗜️ Folders Auto-Packed to Single ZIP</span>
+      <span class="format-tag">📷 Camera QR Scanner</span>
+      <span class="format-tag">📄 1-File Direct (No ZIP)</span>
+      <span class="format-tag">🗜️ Folders Auto-Packed to Single ZIP</span>
       <span class="format-tag">⏱️ 29s Phone Keep-Awake</span>
-      <span class="format-tag">🎬 MP4 MKV AVI</span><span class="format-tag">🖼️ JPG PNG RAW</span>
-      <span class="format-tag">🎵 MP3 FLAC WAV</span><span class="format-tag">📁 Whole Folder Trees</span>
-      <span class="format-tag">⚙️ EXE MSI APK</span><span class="format-tag">💻 Any Code file</span><span class="format-tag">📊 XLSX CSV</span>
-      <span class="format-tag">🎨 PSD AI Figma</span><span class="format-tag">+ Every other format</span>
+      <span class="format-tag">🎬 Videos &amp; Photos</span>
+      <span class="format-tag">📁 Whole Folder Trees</span>
+      <span class="format-tag">⚙️ Every Format</span>
     </div>
   </div>
   <div class="cards">
     <div class="card" onclick="goShare()">
       <div class="icon">📤</div>
       <h2>Send Files / Folder</h2>
-      <p>Select 1 file (shares directly) or a folder/multiple files (auto-packs into a single ZIP). Get a 6-digit code or QR.</p>
+      <p>Select 1 file or a whole folder. Produces a 6-digit code and a QR code instantly.</p>
     </div>
     <div class="card" onclick="goReceive()">
       <div class="icon">📥</div>
       <h2>Receive Files</h2>
-      <p>Enter the 6-digit code from the sender to download at full speed in 1 click.</p>
+      <p>Enter the 6-digit code or tap <strong>📷 Scan QR</strong> to scan the sender's screen with your camera.</p>
     </div>
   </div>
   <div class="perf-box">
-    <div class="ph">⚡ High-Speed Transfer Engine &amp; 29s Heartbeat</div>
-    <strong>Screen stays on automatically</strong> via 29s wake-lock pulse · <strong>256 KB chunks</strong> · <strong>7 STUN servers</strong> for direct P2P<br>
-    <span style="color:var(--muted)">Your phone will not turn off or sleep while sharing or receiving files.</span>
+    <div class="ph">⚡ High-Speed Transfer Engine &amp; QR Scanning</div>
+    <strong>Camera QR Scanner on Receiver</strong> · <strong>Screen stays on automatically</strong> via 29s heartbeat · <strong>256 KB chunks</strong><br>
+    <span style="color:var(--muted)">Send from Laptop to Phone or Phone to Laptop in seconds with instant QR camera scan.</span>
   </div>
   <div class="info-box">
     🔒 <strong>How it works:</strong> If you select 1 file, it sends directly without zipping. If you select multiple files or import a folder, it automatically packs them into a single <code>.zip</code> file. Everything transfers directly between devices.
@@ -198,7 +204,7 @@
       <input type="file" id="folderInput" multiple webkitdirectory onchange="onFilesSelected(this.files, true)" />
     </div>
 
-    <!-- Packaging Progress (When multiple files or folder selected) -->
+    <!-- Packaging Progress -->
     <div id="share-packaging" style="display:none; text-align:center; padding:36px 16px;">
       <div style="font-size:2.8rem; margin-bottom:10px;">🗜️</div>
       <div style="font-size:1.15rem; font-weight:700; margin-bottom:4px;" id="packTitle">Packaging into single ZIP…</div>
@@ -219,7 +225,7 @@
 
       <div class="code-box">
         <div class="code-digits" id="shareCode">——</div>
-        <div class="code-label">Share this 6-digit code with the receiver</div>
+        <div class="code-label">Share this 6-digit code or scan the QR with receiver camera</div>
         <div style="margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
           <button class="btn btn-primary btn-sm" onclick="shareNative()">📲 Share</button>
           <button class="btn btn-outline btn-sm" onclick="copyCode()">📋 Copy Code</button>
@@ -230,7 +236,7 @@
         <!-- Inline QR Code container -->
         <div id="qrContainer" style="display:none; margin-top:16px; padding:14px; background:#fff; border-radius:12px; width:fit-content; margin-left:auto; margin-right:auto;">
           <div id="qrcode" style="display:flex; justify-content:center;"></div>
-          <div style="color:#222; font-size:0.75rem; margin-top:8px; font-weight:600;">Scan with camera to connect instantly</div>
+          <div style="color:#222; font-size:0.75rem; margin-top:8px; font-weight:600;">Scan with camera on receiver to connect</div>
         </div>
       </div>
 
@@ -261,14 +267,27 @@
   <div class="section">
     <h2>📥 Receive Files</h2>
     <div id="recv-step1">
-      <p style="color:var(--muted); font-size:0.9rem; margin-bottom:16px;">Enter the 6-digit code from the sender:</p>
+      <p style="color:var(--muted); font-size:0.9rem; margin-bottom:16px;">Enter the 6-digit code or scan the sender's QR code:</p>
+      
       <div class="code-input-row">
         <input type="text" id="codeInput" maxlength="6" placeholder="000000" inputmode="numeric"
           oninput="this.value=this.value.replace(/\D/g,'')"
           onkeydown="if(event.key==='Enter') connectToPeer()" />
+        <button class="btn btn-outline" id="scanQrBtn" onclick="openQrScanner()" title="Scan QR Code from Sender screen" style="white-space:nowrap;">📷 Scan QR</button>
         <button class="btn btn-green" id="connectBtn" onclick="connectToPeer()">Connect</button>
       </div>
-      <div id="recv-connect-status" style="margin-top:12px; font-size:0.85rem; color:var(--muted);"></div>
+
+      <!-- Live Camera QR Scanner Box -->
+      <div id="scannerBox" style="display:none; margin-top:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="font-weight:700; font-size:0.95rem; color:var(--text);">📷 Point camera at Sender's QR Code</div>
+          <button class="btn btn-outline btn-sm" onclick="closeQrScanner()">✕ Close Camera</button>
+        </div>
+        <div id="qrReader" style="width:100%; max-width:340px; margin:0 auto; overflow:hidden; border-radius:12px; background:#000;"></div>
+        <div style="font-size:0.8rem; color:var(--muted); margin-top:10px;">Point your camera at the QR code shown on the sender screen</div>
+      </div>
+
+      <div id="recv-connect-status" style="margin-top:14px; font-size:0.85rem; color:var(--muted);"></div>
     </div>
 
     <div id="recv-step2" style="display:none; margin-top:18px;">
@@ -384,7 +403,6 @@ function releaseWakeLock() {
   }
 }
 
-// Silent WebAudio oscillator keep-alive (keeps mobile audio pipeline & screen awake)
 function startSilentAudio() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -412,19 +430,15 @@ function stopSilentAudio() {
   } catch (_) {}
 }
 
-// Starts the 29-second heartbeat keep-awake on Sharing OR Receiving
 function startKeepAwake() {
   stopKeepAwake();
   requestWakeLock();
   startSilentAudio();
 
-  // Heartbeat runs exactly every 29 seconds
   keepAwakeTimer = setInterval(() => {
-    // 1. Re-request Screen Wake Lock so phone screen never turns off
     requestWakeLock();
     startSilentAudio();
 
-    // 2. Sender: Send 29s heartbeat ping to all connected receivers
     if (shareConns.length > 0) {
       shareConns.forEach(conn => {
         if (conn && conn.open) {
@@ -433,11 +447,10 @@ function startKeepAwake() {
       });
     }
 
-    // 3. Receiver: Send 29s heartbeat ping to sender
     if (recvConn && recvConn.open) {
       try { recvConn.send({ type: 'ping' }); } catch (_) {}
     }
-  }, 29000); // 29,000 ms = 29 seconds
+  }, 29000); // exactly 29 seconds
 }
 
 function stopKeepAwake() {
@@ -450,14 +463,13 @@ function stopKeepAwake() {
 }
 
 // ══════════════════════════════════════════════════════
-//  PAGE VISIBILITY (Clean foreground wake-up without loops)
+//  PAGE VISIBILITY
 // ══════════════════════════════════════════════════════
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     requestWakeLock();
     startSilentAudio();
 
-    // Check sender status
     if (currentCode && sharePeer && !intentionalDestroy) {
       if (shareConns.length > 0) {
         setShareStatus('green', `${shareConns.length} receiver(s) connected`);
@@ -472,7 +484,6 @@ document.addEventListener('visibilitychange', () => {
       }
     }
 
-    // Check receiver status
     if (recvPeer && document.getElementById('page-receive').classList.contains('active')) {
       if (recvPeer.disconnected && !recvPeer.destroyed) {
         try { recvPeer.reconnect(); } catch (_) {}
@@ -484,8 +495,12 @@ document.addEventListener('visibilitychange', () => {
 // ══════════════════════════════════════════════════════
 //  UTILITIES
 // ══════════════════════════════════════════════════════
-function showPage(id) { document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.getElementById(id).classList.add('active'); }
-function goHome()    { stopSharing(); disconnectRecv(); showPage('page-home'); }
+function showPage(id) {
+  closeQrScanner();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goHome()    { closeQrScanner(); stopSharing(); disconnectRecv(); showPage('page-home'); }
 function goShare()   { showPage('page-share'); }
 function goReceive() {
   showPage('page-receive');
@@ -715,7 +730,7 @@ function startSharing() {
   updateShareUI();
   setShareStatus('yellow', '<span class="connecting-anim"></span>Connecting to server…');
 
-  // Start 29s heartbeat keep-awake
+  // Start 29s keep-awake heartbeat
   startKeepAwake();
   connDevices = {};
   initSharePeer(currentCode);
@@ -994,7 +1009,7 @@ function stopSharing() {
 }
 
 // ══════════════════════════════════════════════════════
-//  SHARE & QR HELPERS
+//  SHARE & QR HELPERS (Sender Side)
 // ══════════════════════════════════════════════════════
 async function shareNative() {
   const url = `${location.origin}${location.pathname}?code=${currentCode}`;
@@ -1042,12 +1057,101 @@ function renderQrCode() {
   if (typeof QRCode !== 'undefined') {
     new QRCode(qrDiv, {
       text: url,
-      width: 160,
-      height: 160,
+      width: 170,
+      height: 170,
       colorDark: '#0f1117',
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.M,
     });
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  📷 QR SCANNER (Receiver Side Camera Scanner)
+// ══════════════════════════════════════════════════════
+let html5QrScanner = null;
+
+function extractCodeFromQr(text) {
+  if (!text) return null;
+  text = String(text).trim();
+
+  // Match ?code=XXXXXX or &code=XXXXXX
+  const urlMatch = text.match(/[?&]code=(\d{6})/i);
+  if (urlMatch) return urlMatch[1];
+
+  // Match fshare-XXXXXX
+  const peerMatch = text.match(/fshare-(\d{6})/i);
+  if (peerMatch) return peerMatch[1];
+
+  // Exactly 6 digits
+  if (/^\d{6}$/.test(text)) return text;
+
+  return null;
+}
+
+async function openQrScanner() {
+  const box = document.getElementById('scannerBox');
+  box.style.display = 'block';
+
+  if (typeof Html5Qrcode === 'undefined') {
+    toast('⚠️ QR Scanner library loading, please try again in a moment');
+    box.style.display = 'none';
+    return;
+  }
+
+  if (html5QrScanner) {
+    try { await html5QrScanner.stop(); } catch (_) {}
+    html5QrScanner = null;
+  }
+
+  const readerDiv = document.getElementById('qrReader');
+  readerDiv.innerHTML = '';
+
+  try {
+    html5QrScanner = new Html5Qrcode("qrReader");
+
+    const config = {
+      fps: 15,
+      qrbox: { width: 230, height: 230 },
+      aspectRatio: 1.0,
+    };
+
+    await html5QrScanner.start(
+      { facingMode: "environment" }, // Prefer rear camera on mobile
+      config,
+      (decodedText) => {
+        const code = extractCodeFromQr(decodedText);
+        if (code) {
+          // Success! Valid code from sender app
+          try { navigator.vibrate?.([60, 40, 60]); } catch (_) {}
+          closeQrScanner();
+          document.getElementById('codeInput').value = code;
+          toast(`✅ Scanned code ${code}! Connecting…`);
+          connectToPeer();
+        } else {
+          toast('⚠️ Not a valid FileShare QR code. Please scan the sender app QR.');
+        }
+      },
+      (error) => {
+        // frame scan error (normal during camera movement), ignore
+      }
+    );
+  } catch (err) {
+    console.warn('Camera start error:', err);
+    toast('⚠️ Camera access denied or unavailable. Enter code manually.');
+    closeQrScanner();
+  }
+}
+
+async function closeQrScanner() {
+  const box = document.getElementById('scannerBox');
+  if (box) box.style.display = 'none';
+  if (html5QrScanner) {
+    try {
+      await html5QrScanner.stop();
+      html5QrScanner.clear();
+    } catch (_) {}
+    html5QrScanner = null;
   }
 }
 
@@ -1060,6 +1164,7 @@ let recvFiles = [];
 let recvBufs  = {};
 
 function connectToPeer() {
+  closeQrScanner();
   const code = document.getElementById('codeInput').value.trim();
   if (!/^\d{6}$/.test(code)) { toast('⚠️ Enter a valid 6-digit code'); return; }
   const btn = document.getElementById('connectBtn');
@@ -1067,7 +1172,7 @@ function connectToPeer() {
   setRecvStatus('<span class="connecting-anim"></span>Connecting to sender…');
   if (recvPeer) { try { recvPeer.destroy(); } catch(_) {} recvPeer = null; }
 
-  // Start 29s heartbeat keep-awake on receiving phone as well
+  // Start 29s heartbeat keep-awake on receiving phone
   startKeepAwake();
 
   const peer = new Peer(PEER_CONFIG);
@@ -1282,6 +1387,7 @@ function setRecvStatus(htmlMsg) {
 }
 
 function disconnectRecv() {
+  closeQrScanner();
   stopKeepAwake();
   if (recvConn) { try { recvConn.close(); } catch(_) {} recvConn = null; }
   if (recvPeer) { try { recvPeer.destroy(); } catch(_) {} recvPeer = null; }
