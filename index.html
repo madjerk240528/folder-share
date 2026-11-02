@@ -6,6 +6,7 @@
   <title>FileShare – High-Speed P2P Sharing</title>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     :root {
       --bg: #0f1117; --surface: #1a1d2e; --card: #21253a; --border: #2e3250;
@@ -146,6 +147,7 @@
     <p>Single files share as-is. Multiple files or folders auto-pack into 1 ZIP. High-speed peer-to-peer.</p>
     <div class="format-tags">
       <span class="format-tag">📄 1-File Direct (No ZIP)</span><span class="format-tag">🗜️ Folders Auto-Packed to Single ZIP</span>
+      <span class="format-tag">📱 Background-Tab Auto-Reconnect</span>
       <span class="format-tag">🎬 MP4 MKV AVI</span><span class="format-tag">🖼️ JPG PNG RAW</span>
       <span class="format-tag">🎵 MP3 FLAC WAV</span><span class="format-tag">📁 Whole Folder Trees</span>
       <span class="format-tag">⚙️ EXE MSI APK</span><span class="format-tag">💻 Any Code file</span><span class="format-tag">📊 XLSX CSV</span>
@@ -156,7 +158,7 @@
     <div class="card" onclick="goShare()">
       <div class="icon">📤</div>
       <h2>Send Files / Folder</h2>
-      <p>Select 1 file (shares directly) or a folder/multiple files (auto-packs into a single ZIP). Get a 6-digit code.</p>
+      <p>Select 1 file (shares directly) or a folder/multiple files (auto-packs into a single ZIP). Get a 6-digit code or QR.</p>
     </div>
     <div class="card" onclick="goReceive()">
       <div class="icon">📥</div>
@@ -166,11 +168,11 @@
   </div>
   <div class="perf-box">
     <div class="ph">⚡ High-Speed Transfer Engine</div>
-    <strong>1-file direct streaming</strong> · <strong>Instant single-ZIP packaging for folders</strong> · <strong>256 KB chunks</strong> · <strong>7 STUN servers</strong><br>
+    <strong>1-file direct streaming</strong> · <strong>Auto-ZIP for folders</strong> · <strong>Keep-alive auto-reconnect on mobile</strong> · <strong>7 STUN servers</strong><br>
     <span style="color:var(--muted)">On a fast LAN or internet connection, expect speeds of <strong style="color:var(--green)">50–500 MB/s</strong> peer-to-peer.</span>
   </div>
   <div class="info-box">
-    🔒 <strong>How it works:</strong> If you select 1 file, it sends directly without zipping. If you select multiple files or import a folder, it automatically packs them into a single <code>.zip</code> file preserving subdirectories. Everything transfers directly between devices.
+    🔒 <strong>How it works:</strong> If you select 1 file, it sends directly without zipping. If you select multiple files or import a folder, it automatically packs them into a single <code>.zip</code> file. Everything transfers directly between devices.
   </div>
 </div>
 
@@ -200,7 +202,7 @@
     <div id="share-packaging" style="display:none; text-align:center; padding:36px 16px;">
       <div style="font-size:2.8rem; margin-bottom:10px;">🗜️</div>
       <div style="font-size:1.15rem; font-weight:700; margin-bottom:4px;" id="packTitle">Packaging into single ZIP…</div>
-      <div style="color:var(--muted); font-size:0.85rem; margin-bottom:20px;" id="packSub">Converting files into a single ZIP for fast high-speed transfer</div>
+      <div style="color:var(--muted); font-size:0.85rem; margin-bottom:20px;" id="packSub">Converting files into a single ZIP for high-speed transfer</div>
       <div class="progress-bar" style="height:6px; max-width:320px; margin:0 auto;">
         <div class="progress-fill" id="packFill" style="width:0%"></div>
       </div>
@@ -218,9 +220,17 @@
       <div class="code-box">
         <div class="code-digits" id="shareCode">——</div>
         <div class="code-label">Share this 6-digit code with the receiver</div>
-        <div style="margin-top:12px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-          <button class="btn btn-primary btn-sm" onclick="copyCode()">📋 Copy Code</button>
+        <div style="margin-top:14px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="shareNative()">📲 Share</button>
+          <button class="btn btn-outline btn-sm" onclick="copyCode()">📋 Copy Code</button>
           <button class="btn btn-outline btn-sm" onclick="copyLink()">🔗 Copy Link</button>
+          <button class="btn btn-outline btn-sm" id="qrToggleBtn" onclick="toggleQr()">📱 QR Code</button>
+        </div>
+
+        <!-- Inline QR Code container -->
+        <div id="qrContainer" style="display:none; margin-top:16px; padding:14px; background:#fff; border-radius:12px; width:fit-content; margin-left:auto; margin-right:auto;">
+          <div id="qrcode" style="display:flex; justify-content:center;"></div>
+          <div style="color:#222; font-size:0.75rem; margin-top:8px; font-weight:600;">Scan with camera to connect instantly</div>
         </div>
       </div>
 
@@ -234,7 +244,7 @@
 
       <hr class="divider" style="margin:18px 0;" />
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-        <div style="font-size:0.9rem; font-weight:600; color:var(--muted);" id="shareListLabel">FILE TO SHARE</div>
+        <div style="font-size:0.9rem; font-weight:600; color:var(--muted);" id="shareListLabel">READY TO SHARE</div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('addMoreInput').click()">➕ Add More</button>
           <button class="btn btn-danger btn-sm" onclick="stopSharing()">⛔ Stop</button>
@@ -291,7 +301,7 @@
 'use strict';
 
 // ══════════════════════════════════════════════════════
-//  ⚡ SPEED CONFIG
+//  ⚡ SPEED & NETWORK CONFIG
 // ══════════════════════════════════════════════════════
 const CHUNK_SIZE   = 256 * 1024;        // 256 KB per chunk
 const HIGH_WATER   = 8  * 1024 * 1024;  // 8 MB — pause sending
@@ -309,7 +319,7 @@ const ICE_SERVERS = [
   { urls: 'stun:stun.cloudflare.com:3478'     },
 ];
 
-// PeerJS signalling fallback
+// PeerJS signalling endpoints
 const PEER_SERVERS = [
   { host: '0.peerjs.com', port: 443, path: '/', secure: true  },
   { host: 'peer.miragejs.com', port: 443, path: '/', secure: true },
@@ -357,6 +367,79 @@ function getDeviceInfo() {
 }
 
 const MY_DEVICE = getDeviceInfo();
+
+// ══════════════════════════════════════════════════════
+//  MOBILE SLEEP & WAKE LOCK
+// ══════════════════════════════════════════════════════
+let wakeLock = null;
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    }
+  } catch (_) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    try { wakeLock.release(); } catch (_) {}
+    wakeLock = null;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  HEARTBEAT (Prevents mobile background socket drops)
+// ══════════════════════════════════════════════════════
+let heartbeatTimer = null;
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    if (sharePeer && !sharePeer.disconnected && !sharePeer.destroyed) {
+      try {
+        if (sharePeer.socket && typeof sharePeer.socket.send === 'function') {
+          sharePeer.socket.send({ type: 'HEARTBEAT' });
+        }
+      } catch (_) {}
+    }
+  }, 10000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  VISIBILITY CHANGE (Foreground recovery for mobile tabs)
+// ══════════════════════════════════════════════════════
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    requestWakeLock();
+
+    // Check sender peer
+    if (currentCode && sharePeer) {
+      if (sharePeer.disconnected && !sharePeer.destroyed) {
+        setShareStatus('yellow', '<span class="connecting-anim"></span> Reconnecting…');
+        try { sharePeer.reconnect(); } catch (_) { recoverSharePeer(currentCode); }
+      } else if (sharePeer.destroyed) {
+        recoverSharePeer(currentCode);
+      } else if (sharePeer.open) {
+        setShareStatus(shareConns.length ? 'green' : 'yellow',
+          shareConns.length ? `${shareConns.length} receiver(s) connected` : 'Ready — share the code above');
+      }
+    }
+
+    // Check receiver peer
+    if (recvPeer && document.getElementById('page-receive').classList.contains('active')) {
+      if (recvPeer.disconnected && !recvPeer.destroyed) {
+        try { recvPeer.reconnect(); } catch (_) {}
+      }
+    }
+  }
+});
 
 // ══════════════════════════════════════════════════════
 //  UTILITIES
@@ -423,8 +506,10 @@ function createPeerWithFallback(peerId, onReady, onError) {
   let serverIdx = 0;
   let peer = null;
   let timeoutHandle = null;
+  let hasOpened = false;
 
   function tryNext() {
+    if (hasOpened) return;
     if (peer) { try { peer.destroy(); } catch(_) {} peer = null; }
     if (serverIdx >= PEER_SERVERS.length) {
       onError(new Error('Could not connect to any signalling server'));
@@ -442,21 +527,26 @@ function createPeerWithFallback(peerId, onReady, onError) {
     peer = peerId ? new Peer(peerId, cfg) : new Peer(cfg);
 
     timeoutHandle = setTimeout(() => {
-      console.warn('[FileShare] Signalling timeout, trying next…');
-      tryNext();
+      if (!hasOpened) {
+        console.warn('[FileShare] Signalling timeout, trying next…');
+        tryNext();
+      }
     }, 4000);
 
     peer.on('open', id => {
       clearTimeout(timeoutHandle);
+      hasOpened = true;
       onReady(peer, id);
     });
 
     peer.on('error', err => {
-      clearTimeout(timeoutHandle);
-      if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
-        tryNext();
-      } else {
-        onError(err);
+      if (!hasOpened) {
+        clearTimeout(timeoutHandle);
+        if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+          tryNext();
+        } else {
+          onError(err);
+        }
       }
     });
   }
@@ -478,7 +568,6 @@ async function packageIntoZip(files, zipName, onProgress) {
     zip.file(relPath, f);
   }
 
-  // Fast deflate compression (level 1) for rapid bundling
   const blob = await zip.generateAsync({
     type: 'blob',
     compression: 'DEFLATE',
@@ -488,12 +577,10 @@ async function packageIntoZip(files, zipName, onProgress) {
     if (onProgress) onProgress(meta.percent);
   });
 
-  const zipFile = new File([blob], zipName, {
+  return new File([blob], zipName, {
     type: 'application/zip',
     lastModified: Date.now(),
   });
-
-  return zipFile;
 }
 
 // ══════════════════════════════════════════════════════
@@ -542,11 +629,12 @@ async function onDrop(e) {
 //  SHARE SIDE
 // ══════════════════════════════════════════════════════
 let sharedFiles     = [];
-let originalSource  = []; // Keep original file list in case user adds more
+let originalSource  = [];
 let sharePeer       = null;
 let shareConns      = [];
 let currentCode     = '';
 let connDevices     = {};
+let isRecovering    = false;
 
 async function onFilesSelected(list, isFolder = false, explicitFolderName = '') {
   const files = Array.from(list);
@@ -555,9 +643,7 @@ async function onFilesSelected(list, isFolder = false, explicitFolderName = '') 
   const hasRelativePath = files.some(f => f.webkitRelativePath && f.webkitRelativePath.includes('/'));
   const isFolderImport  = isFolder || hasRelativePath;
 
-  // ─────────────────────────────────────────────────────────────
-  // 1 FILE RULE: If exactly 1 file and NOT a folder -> DO NOT CONVERT TO ZIP!
-  // ─────────────────────────────────────────────────────────────
+  // 1 FILE RULE: Do NOT convert to zip
   if (files.length === 1 && !isFolderImport) {
     const singleFile = files[0];
     singleFile.isZippedBundle = false;
@@ -568,9 +654,7 @@ async function onFilesSelected(list, isFolder = false, explicitFolderName = '') 
     return;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // MULTIPLE FILES OR FOLDER RULE: Convert to a SINGLE ZIP FILE!
-  // ─────────────────────────────────────────────────────────────
+  // MULTIPLE FILES / FOLDER: Convert to single ZIP
   let zipName = 'Shared_Files.zip';
   if (explicitFolderName) {
     zipName = `${explicitFolderName.replace(/[\/\\]/g, '')}.zip`;
@@ -586,7 +670,6 @@ async function onFilesSelected(list, isFolder = false, explicitFolderName = '') 
     zipName = 'Shared_Files.zip';
   }
 
-  // Show packaging UI
   document.getElementById('share-step1').style.display = 'none';
   document.getElementById('share-step2').style.display = 'none';
   document.getElementById('share-packaging').style.display = 'block';
@@ -623,7 +706,6 @@ async function onFilesSelected(list, isFolder = false, explicitFolderName = '') 
 async function onMoreFilesAdded(list, isFolder = false) {
   const newFiles = Array.from(list);
   if (!newFiles.length) return;
-  // Combine with original files and package into single ZIP
   const combined = [...originalSource, ...newFiles];
   stopSharing();
   await onFilesSelected(combined, isFolder);
@@ -635,17 +717,33 @@ function startSharing() {
   document.getElementById('share-step1').style.display = 'none';
   document.getElementById('share-step2').style.display = 'block';
   document.getElementById('shareCode').textContent = currentCode;
+
+  const qrBox = document.getElementById('qrContainer');
+  if (qrBox) qrBox.style.display = 'none';
+  const qrBtn = document.getElementById('qrToggleBtn');
+  if (qrBtn) qrBtn.textContent = '📱 QR Code';
+
   updateShareUI();
   setShareStatus('yellow', '<span class="connecting-anim"></span>Setting up connection…');
 
-  if (sharePeer) { try { sharePeer.destroy(); } catch(_) {} }
+  requestWakeLock();
   connDevices = {};
+  initSharePeer(currentCode);
+}
+
+function initSharePeer(code) {
+  if (sharePeer) {
+    try { sharePeer.destroy(); } catch (_) {}
+    sharePeer = null;
+  }
+  const targetId = 'fshare-' + code;
 
   createPeerWithFallback(
-    'fshare-' + currentCode,
+    targetId,
     (peer) => {
       sharePeer = peer;
       setShareStatus('yellow', 'Ready — share the code above');
+      startHeartbeat();
 
       peer.on('connection', conn => {
         shareConns.push(conn);
@@ -671,21 +769,82 @@ function startSharing() {
           delete connDevices[conn.peer];
           updatePeerCount();
           updateConnectedDevices();
-          setShareStatus(shareConns.length ? 'green' : 'yellow', shareConns.length ? `${shareConns.length} receiver(s) connected` : 'Waiting for receiver…');
+          setShareStatus(shareConns.length ? 'green' : 'yellow',
+            shareConns.length ? `${shareConns.length} receiver(s) connected` : 'Waiting for receiver…');
         });
 
         conn.on('error', err => console.warn('conn err', err));
       });
 
+      // Smooth auto-reconnect when tab drops socket in background
+      peer.on('disconnected', () => {
+        console.warn('[FileShare] Peer socket disconnected. Recovering…');
+        recoverSharePeer(code);
+      });
+
       peer.on('error', err => {
-        if (err.type === 'unavailable-id') { setTimeout(startSharing, 400); }
-        else setShareStatus('red', 'Error: ' + err.message);
+        console.warn('[FileShare] Share peer error:', err.type, err.message);
+
+        const isSocketDrop =
+          err.type === 'socket-closed' ||
+          err.type === 'socket-error' ||
+          err.type === 'network' ||
+          err.type === 'disconnected' ||
+          (err.message && err.message.toLowerCase().includes('lost connection'));
+
+        if (isSocketDrop) {
+          recoverSharePeer(code);
+          return;
+        }
+
+        if (err.type === 'unavailable-id') {
+          setTimeout(() => {
+            if (currentCode === code && !shareConns.length) {
+              initSharePeer(code);
+            }
+          }, 800);
+          return;
+        }
+
+        setShareStatus('red', 'Error: ' + escHtml(err.message));
       });
     },
     (err) => {
-      setShareStatus('red', 'Signalling failed: ' + err.message);
+      setShareStatus('red', 'Signalling error: ' + escHtml(err.message));
     }
   );
+}
+
+function recoverSharePeer(code) {
+  if (currentCode !== code) return;
+  // If active direct P2P connection exists, transfer continues uninterrupted
+  if (shareConns.length > 0 && shareConns.some(c => c.open)) {
+    setShareStatus('green', `${shareConns.length} receiver(s) connected (P2P direct)`);
+    return;
+  }
+
+  setShareStatus('yellow', '<span class="connecting-anim"></span> Reconnecting to server…');
+
+  if (isRecovering) return;
+  isRecovering = true;
+
+  setTimeout(() => {
+    isRecovering = false;
+    if (currentCode !== code) return;
+
+    if (sharePeer && !sharePeer.destroyed && sharePeer.disconnected) {
+      try {
+        console.log('[FileShare] Reconnecting existing peer instance…');
+        sharePeer.reconnect();
+        return;
+      } catch (e) {
+        console.warn('[FileShare] peer.reconnect() error:', e);
+      }
+    }
+
+    // Re-initialize using the EXACT SAME CODE
+    initSharePeer(code);
+  }, 1000);
 }
 
 function updateConnectedDevices() {
@@ -813,8 +972,10 @@ function removeFile(idx) {
 }
 
 function stopSharing() {
+  stopHeartbeat();
+  releaseWakeLock();
   if (sharePeer) { try { sharePeer.destroy(); } catch(_) {} sharePeer = null; }
-  shareConns = []; sharedFiles = []; originalSource = []; currentCode = ''; connDevices = {};
+  shareConns = []; sharedFiles = []; originalSource = []; currentCode = ''; connDevices = {}; isRecovering = false;
   document.getElementById('share-packaging').style.display = 'none';
   document.getElementById('share-step1').style.display = 'block';
   document.getElementById('share-step2').style.display = 'none';
@@ -824,10 +985,62 @@ function stopSharing() {
   });
 }
 
+// ══════════════════════════════════════════════════════
+//  SHARE & QR HELPERS
+// ══════════════════════════════════════════════════════
+async function shareNative() {
+  const url = `${location.origin}${location.pathname}?code=${currentCode}`;
+  const shareData = {
+    title: 'FileShare',
+    text: `Download files using code ${currentCode} or this direct link:`,
+    url: url,
+  };
+
+  if (navigator.share && navigator.canShare && navigator.canShare(shareData)) {
+    try {
+      await navigator.share(shareData);
+      toast('✅ Shared!');
+      return;
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+    }
+  }
+  copyLink();
+}
+
 function copyCode() { navigator.clipboard.writeText(currentCode).then(() => toast('✅ Code copied!')); }
 function copyLink() {
   const url = `${location.origin}${location.pathname}?code=${currentCode}`;
   navigator.clipboard.writeText(url).then(() => toast('🔗 Link copied! Send it to the receiver.'));
+}
+
+function toggleQr() {
+  const box = document.getElementById('qrContainer');
+  const btn = document.getElementById('qrToggleBtn');
+  if (box.style.display === 'block') {
+    box.style.display = 'none';
+    btn.textContent = '📱 QR Code';
+  } else {
+    box.style.display = 'block';
+    btn.textContent = '✖ Hide QR';
+    renderQrCode();
+  }
+}
+
+function renderQrCode() {
+  const qrDiv = document.getElementById('qrcode');
+  qrDiv.innerHTML = '';
+  const url = `${location.origin}${location.pathname}?code=${currentCode}`;
+  if (typeof QRCode !== 'undefined') {
+    new QRCode(qrDiv, {
+      text: url,
+      width: 160,
+      height: 160,
+      colorDark: '#0f1117',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -851,6 +1064,12 @@ function connectToPeer() {
     (peer) => {
       recvPeer = peer;
       setRecvStatus('<span class="connecting-anim"></span>Reaching sender…');
+
+      peer.on('disconnected', () => {
+        if (recvPeer && !recvPeer.destroyed && recvPeer.disconnected) {
+          try { recvPeer.reconnect(); } catch (_) {}
+        }
+      });
 
       recvConn = recvPeer.connect('fshare-' + code, {
         reliable: true,
@@ -901,7 +1120,6 @@ function onManifest(data) {
   document.getElementById('recv-step1').style.display = 'none';
   document.getElementById('recv-step2').style.display = 'block';
 
-  // Sender device card
   if (data.senderName) {
     document.getElementById('senderDeviceIcon').textContent = data.senderIcon || '💻';
     document.getElementById('senderDeviceName').textContent = data.senderName;
@@ -909,7 +1127,6 @@ function onManifest(data) {
     document.getElementById('senderDeviceCard').style.display = 'flex';
   }
 
-  // Set download button text
   const mainBtn = document.getElementById('recvDownloadMainBtn');
   if (recvFiles.length === 1) {
     mainBtn.textContent = recvFiles[0].isZip ? '⬇ Download ZIP' : '⬇ Download File';
